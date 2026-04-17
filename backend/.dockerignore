@@ -1,0 +1,26 @@
+# FOR PYTHON (All the things not needed in the container)
+venv/
+
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+.env
+.env.local
+*.env
+
+
+tests/
+test_*.py
+
+*.md
+!requirements.txt    
+
+
+# For Mac metadata
+.DS_Store
+
+# Git files
+.git/
+.gitignore

@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - ./backend:/app
+
+    environment:
+      - PYTHONUNBUFFERED=1
+
+      # Tells Python it's running in development mode
+      # change later on
+      - ENVIRONMENT=development
+
+    restart: unless-stopped
+
+    # check the health of the container
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
