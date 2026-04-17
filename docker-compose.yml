@@ -11,6 +11,8 @@ services:
 
     volumes:
       - ./backend:/app
+      - ./backend/data/sqlite:/app/data/sqlite
+      - ./backend/data/chromadb:/app/data/chromadb
 
     environment:
       - PYTHONUNBUFFERED=1
@@ -18,6 +20,8 @@ services:
       # Tells Python it's running in development mode
       # change later on
       - ENVIRONMENT=development
+      - SQLITE_DB_PATH=/app/data/sqlite/app.db
+      - CHROMA_PERSIST_DIRECTORY=/app/data/chromadb
 
     restart: unless-stopped
 

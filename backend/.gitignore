@@ -5,3 +5,9 @@ __pycache__/
 .env
 .env.local
 *.env
+
+data/sqlite/*
+!data/sqlite/.gitkeep
+
+data/chromadb/*
+!data/chromadb/.gitkeep
