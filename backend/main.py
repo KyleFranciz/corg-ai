@@ -26,8 +26,6 @@ app.add_middleware(
     allow_headers=["*"],  # might change the headers to a specific one for saftey
 )
 
-# TODO: add the setup for the sqlite database with the initial tables
-
 
 app.include_router(api_router, prefix="/api/v1")
 app.include_router(
