@@ -8,6 +8,7 @@ from database.database_engine import create_database
 
 
 # Lifespan function to run when server starts up
+# app - helps to define FastAPI so that the context manager has context
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # runs on start up
