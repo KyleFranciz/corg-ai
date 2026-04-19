@@ -8,6 +8,7 @@ SAMPLE_RATE = 16000
 
 
 # NOTE: Might adjust the max seconds for recording length
+# FUNCTION TO LISTENING AND RECORDING THE USERS VOICE
 def record_audio_until_silent(silence_seconds: float = 1.5, max_seconds: int = 40):
     """
     Listens to the mic.
