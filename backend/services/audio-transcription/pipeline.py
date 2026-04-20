@@ -1,10 +1,14 @@
-from silero_vad import load_silero_vad, read_audio, get_speech_timestamps
+from silero_vad import load_silero_vad
 import sounddevice as sd
 import numpy as np
+import subprocess
+from faster_whisper import WhisperModel
 
 vad_model = load_silero_vad()
+whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
 
 SAMPLE_RATE = 16000
+PIPER_MODEL_PATH = "models/en_US-libritts_r-medium.onnx"
 
 
 # NOTE: Might adjust the max seconds for recording length
@@ -63,9 +67,29 @@ def record_audio_until_silent(silence_seconds: float = 1.5, max_seconds: int = 4
     return np.concatenate(recorded_chunks, axis=0)
 
 
-def transcribe_audio():
-    pass
+# turn the audio into text
+def transcribe_audio(audio: np.ndarray) -> str:
+    print("Whisper is transcribing... ")
+    segments, _ = whisper_model.transcribe(audio, beam_size=5)
+    text = " ".join([seg.text for seg in segments])
+    print(f"Whisper Results: {text}")
+    return text
 
 
-def speak_response():
-    pass
+# make the model speek the response to the user
+def speak_response(text: str):
+    print(f"Piper Speaking: {text}")
+    result = subprocess.run(
+        ["python", "-m", "piper", "--model", PIPER_MODEL_PATH, "--output-raw"],
+        input=text.encode(),
+        capture_output=True,
+    )
+
+    if result.returncode != 0:
+        print(f"Piper Error: {result.stderr.decode()}")
+        return
+
+    audio = np.frombuffer(result.stdout, dtype=np.int16)
+    sd.play(audio, samplerate=22050)
+    sd.wait()
+    print("Piper Done Talking")
