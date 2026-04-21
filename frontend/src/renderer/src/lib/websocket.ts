@@ -1,5 +1,35 @@
 const CONNECTION_TIMEOUT_MS = 10000
 
+export type PipelineStage = 'connected' | 'listening' | 'transcribing' | 'speaking' | 'completed'
+
+export type PipelineEvent =
+  | { type: 'ack'; action: 'start_pipeline' }
+  | { type: 'status'; stage: PipelineStage; message: string }
+  | { type: 'result'; transcript: string; audio_duration_seconds: number }
+  | { type: 'error'; stage: string; message: string }
+
+export function parsePipelineEvent(rawData: string): PipelineEvent | null {
+  try {
+    const event = JSON.parse(rawData)
+    if (!event || typeof event !== 'object' || !('type' in event)) {
+      return null
+    }
+
+    const eventType = event.type
+    if (eventType !== 'ack' && eventType !== 'status' && eventType !== 'result' && eventType !== 'error') {
+      return null
+    }
+
+    return event as PipelineEvent
+  } catch {
+    return null
+  }
+}
+
+export function buildStartPipelineMessage(): string {
+  return JSON.stringify({ action: 'start_pipeline' })
+}
+
 function normalizeBackendUrl(rawBackendUrl: string): URL {
   let backendUrl: URL
 
