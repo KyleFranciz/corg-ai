@@ -79,6 +79,7 @@ def transcribe_audio(audio: np.ndarray) -> str:
 # make the model speek the response to the user
 def speak_response(text: str):
     print(f"Piper Speaking: {text}")
+    # run commands
     result = subprocess.run(
         ["python", "-m", "piper", "--model", PIPER_MODEL_PATH, "--output-raw"],
         input=text.encode(),
