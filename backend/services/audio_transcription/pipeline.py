@@ -2,13 +2,8 @@ from __future__ import annotations
 
 import subprocess
 import time
+import wave
 from typing import Any, TypedDict
-
-import numpy as np
-import sounddevice as sd
-import torch
-from faster_whisper import WhisperModel
-from silero_vad import load_silero_vad
 
 
 SAMPLE_RATE = 16000
@@ -16,7 +11,7 @@ PIPER_SAMPLE_RATE = 22050
 PIPER_MODEL_PATH = 'models/en_US-libritts_r-medium.onnx'
 
 _vad_model: Any | None = None
-_whisper_model: WhisperModel | None = None
+_whisper_model: Any | None = None
 
 
 class PipelineResult(TypedDict):
@@ -28,18 +23,73 @@ class PipelineResult(TypedDict):
 def _get_vad_model() -> Any:
     global _vad_model
     if _vad_model is None:
+        try:
+            from silero_vad import load_silero_vad
+        except Exception as exc:
+            raise RuntimeError(
+                'Audio pipeline dependency unavailable: silero-vad is not installed or failed to load'
+            ) from exc
+
         _vad_model = load_silero_vad()
     return _vad_model
 
 
-def _get_whisper_model() -> WhisperModel:
+def _get_whisper_model() -> Any:
     global _whisper_model
     if _whisper_model is None:
+        try:
+            from faster_whisper import WhisperModel
+        except Exception as exc:
+            raise RuntimeError(
+                'Audio pipeline dependency unavailable: faster-whisper is not installed or failed to load'
+            ) from exc
+
         _whisper_model = WhisperModel('base', device='cpu', compute_type='int8')
     return _whisper_model
 
 
+def _import_numpy() -> Any:
+    try:
+        import numpy as np
+    except Exception as exc:
+        raise RuntimeError(
+            'Audio pipeline dependency unavailable: numpy is not installed in this environment'
+        ) from exc
+
+    return np
+
+
+def _import_sounddevice() -> Any:
+    try:
+        import sounddevice as sd
+    except OSError as exc:
+        raise RuntimeError(
+            'Audio output/input backend unavailable: PortAudio library not found in this environment'
+        ) from exc
+    except Exception as exc:
+        raise RuntimeError(
+            'Audio pipeline dependency unavailable: sounddevice is not installed or failed to load'
+        ) from exc
+
+    return sd
+
+
+def _import_torch() -> Any:
+    try:
+        import torch
+    except Exception as exc:
+        raise RuntimeError(
+            'Audio pipeline dependency unavailable: torch is not installed or failed to load'
+        ) from exc
+
+    return torch
+
+
 def record_audio_until_silent(silence_seconds: float = 1.5, max_seconds: int = 15) -> np.ndarray:
+    np = _import_numpy()
+    sd = _import_sounddevice()
+    torch = _import_torch()
+
     chunk_size = 512
     silence_chunk_limit = int(SAMPLE_RATE / chunk_size * silence_seconds)
     max_chunks = int(SAMPLE_RATE / chunk_size * max_seconds)
@@ -95,7 +145,10 @@ def transcribe_audio(audio: np.ndarray) -> str:
     return text
 
 
-def speak_response(text: str, model_path: str = PIPER_MODEL_PATH) -> None:
+def speak_response(text: str, model_path: str = PIPER_MODEL_PATH, save_path: str | None = None) -> None:
+    np = _import_numpy()
+    sd = _import_sounddevice()
+
     if not text.strip():
         raise RuntimeError('Cannot run Piper with empty text')
 
@@ -113,6 +166,13 @@ def speak_response(text: str, model_path: str = PIPER_MODEL_PATH) -> None:
     audio = np.frombuffer(result.stdout, dtype=np.int16)
     if audio.size == 0:
         raise RuntimeError('Piper produced no audio output')
+
+    if save_path is not None:
+        with wave.open(save_path, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(PIPER_SAMPLE_RATE)
+            wf.writeframes(audio.tobytes())
 
     sd.play(audio, samplerate=PIPER_SAMPLE_RATE)
     sd.wait()

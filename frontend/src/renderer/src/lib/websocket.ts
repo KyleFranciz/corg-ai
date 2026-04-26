@@ -1,5 +1,16 @@
 const CONNECTION_TIMEOUT_MS = 10000
 
+const CLOSE_CODE_HINTS: Record<number, string> = {
+  1000: 'normal closure',
+  1001: 'server or client went away',
+  1006: 'connection dropped unexpectedly',
+  1008: 'request rejected by server policy',
+  1009: 'message too large',
+  1011: 'server hit an internal error',
+  1012: 'server is restarting',
+  1013: 'server is overloaded, retry shortly'
+}
+
 export type PipelineStage = 'connected' | 'listening' | 'transcribing' | 'speaking' | 'completed'
 
 export type PipelineEvent =
@@ -60,6 +71,52 @@ export function getWebSocketUrl(): string {
   backendUrl.hash = ''
 
   return backendUrl.toString()
+}
+
+export function getHealthUrl(): string {
+  const rawBackendUrl = import.meta.env.VITE_BACKEND_URL?.trim()
+
+  if (!rawBackendUrl) {
+    throw new Error('Missing VITE_BACKEND_URL in frontend environment')
+  }
+
+  const backendUrl = normalizeBackendUrl(rawBackendUrl)
+  backendUrl.pathname = '/api/v1/health'
+  backendUrl.search = ''
+  backendUrl.hash = ''
+
+  return backendUrl.toString()
+}
+
+export async function verifyBackendHealth(): Promise<void> {
+  const healthUrl = getHealthUrl()
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), CONNECTION_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(healthUrl, { signal: controller.signal })
+    if (!response.ok) {
+      throw new Error(`Backend health check failed (${response.status})`)
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error(`Backend health check timed out: ${healthUrl}`)
+    }
+
+    const message = error instanceof Error ? error.message : 'Unknown backend health check error'
+    throw new Error(`${message}: ${healthUrl}`)
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
+
+export function describeWebSocketClose(event: CloseEvent): string {
+  const hint = CLOSE_CODE_HINTS[event.code] ?? 'unknown reason'
+  if (event.reason) {
+    return `WebSocket closed (code ${event.code}: ${hint}, reason: ${event.reason})`
+  }
+
+  return `WebSocket closed (code ${event.code}: ${hint})`
 }
 
 export function testWebSocketConnection(): Promise<string> {

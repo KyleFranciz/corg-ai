@@ -74,6 +74,7 @@ shellingham==1.5.4
 silero-vad==6.2.1
 six==1.17.0
 sounddevice==0.5.5
+sqlmodel==0.0.38
 SQLAlchemy==2.0.49
 starlette==1.0.0
 sympy==1.14.0

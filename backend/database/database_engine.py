@@ -9,6 +9,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 DB_DIR = BASE_DIR / "data" / "sqlite"
 DB_DIR.mkdir(parents=True, exist_ok=True)
 
+AUDIO_DIR = BASE_DIR / "data" / "audio"
+AUDIO_DIR.mkdir(parents=True, exist_ok=True)
+
 DATABASE_URL = f"sqlite:///{DB_DIR / 'corg.db'}"
 
 # turn of echo later on (prints to console)

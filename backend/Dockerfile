@@ -4,6 +4,8 @@ FROM python:3.11-slim
 RUN apt-get update && apt-get install -y \
   # needed for audio processing libraries
   libsndfile1 \
+  libportaudio2 \
+  libasound2 \
   ffmpeg \
   # needed to compile some Python packages from source
   build-essential \

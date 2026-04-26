@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   buildStartPipelineMessage,
+  describeWebSocketClose,
   getWebSocketUrl,
   parsePipelineEvent,
-  type PipelineStage
+  type PipelineStage,
+  verifyBackendHealth
 } from './lib/websocket'
 // import Versions from './components/Versions'
 
@@ -34,7 +36,21 @@ function App(): React.JSX.Element {
     }
   }, [])
 
-  const handleStartPipeline = (): void => {
+  const formatPipelineError = (stage: string, message: string): string => {
+    const normalized = message.toLowerCase()
+
+    if (
+      normalized.includes('error querying device -1') ||
+      normalized.includes('no default input device') ||
+      normalized.includes('invalid input device')
+    ) {
+      return `[${stage}] ${message}. Hint: no default microphone was detected. Select/set a valid input device on your host OS and retry.`
+    }
+
+    return `[${stage}] ${message}`
+  }
+
+  const handleStartPipeline = async (): Promise<void> => {
     if (isRunning) {
       return
     }
@@ -52,6 +68,8 @@ function App(): React.JSX.Element {
     setWsError(null)
 
     try {
+      await verifyBackendHealth()
+
       const socket = new WebSocket(websocketTarget)
       socketRef.current = socket
 
@@ -95,7 +113,7 @@ function App(): React.JSX.Element {
         }
 
         setIsRunning(false)
-        setWsError(`[${parsedEvent.stage}] ${parsedEvent.message}`)
+        setWsError(formatPipelineError(parsedEvent.stage, parsedEvent.message))
       }
 
       socket.onerror = (): void => {
@@ -104,9 +122,14 @@ function App(): React.JSX.Element {
         setWsError('WebSocket connection failed')
       }
 
-      socket.onclose = (): void => {
+      socket.onclose = (event: CloseEvent): void => {
         setConnectionState('closed')
         setIsRunning(false)
+        socketRef.current = null
+
+        if (event.code !== 1000) {
+          setWsError(`${describeWebSocketClose(event)}. Check backend logs for the failure at the last reported stage.`)
+        }
       }
     } catch (error) {
       setConnectionState('error')
@@ -124,7 +147,7 @@ function App(): React.JSX.Element {
       <p>Stage: {pipelineStage ?? 'idle'}</p>
       <p>Status: {statusMessage ?? 'waiting'}</p>
 
-      <button onClick={handleStartPipeline} disabled={isRunning}>
+      <button onClick={() => void handleStartPipeline()} disabled={isRunning}>
         {isRunning ? 'Pipeline Running...' : 'Start Audio -> TTS Pipeline'}
       </button>
 

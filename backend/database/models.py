@@ -22,7 +22,7 @@ class Session(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ended_at: Optional[datetime] = None
-    summary: str  # summary about the session (gen summary with smaller agent)
+    summary: Optional[str] = None  # summary about the session (gen summary with smaller agent)
 
 
 # Messages from agent or user

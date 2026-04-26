@@ -76,7 +76,7 @@ def transcribe_audio(audio: np.ndarray) -> str:
     return text
 
 
-# make the model speek the response to the user
+# make the model speek the response to the user (Piper handles this)
 def speak_response(text: str):
     print(f"Piper Speaking: {text}")
     # run commands
