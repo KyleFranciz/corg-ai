@@ -6,11 +6,11 @@ from typing import Any, Optional
 import chromadb
 from chromadb.api.types import Documents, EmbeddingFunction, Embeddings
 
-from database.database_engine import BASE_DIR
+from database.database_engine import DATA_DIR
 from rag.embedding import embedder
 
 # path for the collection storage (got it running for docker & in regular dev mode)
-DEFAULT_CHROMA_DIR = BASE_DIR / "data" / "chromadb"
+DEFAULT_CHROMA_DIR = DATA_DIR / 'chromadb'
 CHROMA_PATH = os.getenv("CHROMA_PATH", str(DEFAULT_CHROMA_DIR))
 CHROMA_DIR = Path(CHROMA_PATH)
 CHROMA_DIR.mkdir(parents=True, exist_ok=True)
