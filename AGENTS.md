@@ -8,6 +8,13 @@ Operational guidance for coding agents working in this repository.
 - No top-level task runner is defined.
 - Run commands from the matching project directory.
 
+## Offline-First and Local Storage Policy
+- This application is fully offline-first.
+- Treat all core features as local/on-device by default.
+- Do not add cloud dependencies or remote data services unless explicitly requested.
+- Persist app data locally on-device (e.g., SQLite, ChromaDB, local files under configured data directories).
+- Prefer local vector storage (`CHROMA_PATH`) and local model endpoints (`OLLAMA_HOST`) for all RAG functionality.
+
 ## Rule Files (Cursor/Copilot)
 - Checked `.cursor/rules/`.
 - Checked `.cursorrules`.

@@ -13,7 +13,7 @@ from sqlmodel import Session as DbSession
 from database.database_engine import engine, AUDIO_DIR
 from database.models import Messages, MessageRole
 from database.models import Session as SessionRecord
-from services.agent import AgentHistoryMessage, generate_agent_response, get_history_limit
+from services.agent import AgentHistoryMessage, generate_agent_response, get_history_limit, retrieve_context
 from services.audio_transcription.pipeline import record_audio_until_silent
 from services.audio_transcription.pipeline import speak_response
 from services.audio_transcription.pipeline import transcribe_audio
@@ -128,10 +128,27 @@ async def _run_audio_pipeline(
         db.commit()
         logger.info('Stored user transcript session_id=%s transcript_chars=%s', session_id, len(transcript))
 
+        stage = "retrieving"
+        stage_started_at = time.perf_counter()
+        await _send_status(websocket, "retrieving", "Retrieving context from ChromaDB")
+        retrieved_chunks = await asyncio.to_thread(retrieve_context, transcript)
+        logger.info(
+            'Pipeline stage completed session_id=%s stage=%s duration_seconds=%.3f retrieved_chunks=%s',
+            session_id,
+            stage,
+            time.perf_counter() - stage_started_at,
+            len(retrieved_chunks),
+        )
+
         stage = "responding"
         stage_started_at = time.perf_counter()
         await _send_status(websocket, "responding", "Generating agent response with Ollama")
-        response_text = await asyncio.to_thread(generate_agent_response, transcript, history)
+        response_text = await asyncio.to_thread(
+            generate_agent_response,
+            transcript,
+            history,
+            retrieved_chunks,
+        )
         logger.info(
             'Pipeline stage completed session_id=%s stage=%s duration_seconds=%.3f response_chars=%s',
             session_id,
@@ -171,6 +188,7 @@ async def _run_audio_pipeline(
                 "transcript": transcript,
                 "response": response_text,
                 "audio_duration_seconds": round(float(audio.shape[0] / 16000), 3),
+                "retrieved_context_count": len(retrieved_chunks),
             },
             websocket,
         )

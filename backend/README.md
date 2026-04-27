@@ -22,6 +22,7 @@ backend/
 - `GET /api/v1/health` - Health check endpoint.
 - `WS /api/v1/ws` - Versioned WebSocket endpoint.
 - `WS /ws` - Backward-compatible WebSocket alias.
+- `GET /api/v1/debug/retrieval?query=...&top_k=...` - Debug retrieval endpoint to inspect returned chunks.
 
 ## Run Locally
 
@@ -55,6 +56,8 @@ Environment overrides:
 - `CORG_AGENT_MAX_TOKENS`: Optional max response tokens for Ollama (`num_predict`).
 - `CORG_AGENT_HISTORY_LIMIT`: Number of recent messages included in chat history (default `12`).
 - `CORG_AGENT_SYSTEM_PROMPT`: Optional system prompt for the LangChain agent.
+- `CORG_RAG_TOP_K`: Number of chunks retrieved from Chroma for each query (default `4`).
+- `CORG_RAG_DEBUG`: When `true`, logs retrieved chunk previews for each query.
 
 Override precedence:
 
@@ -74,7 +77,7 @@ Use either endpoint while migrating:
 
 ## Agent (LangChain + Ollama)
 
-The WebSocket pipeline now generates an agent response with LangChain + Ollama after speech transcription, then sends that response to Piper TTS.
+The WebSocket pipeline now transcribes speech, retrieves top-K context chunks from ChromaDB, generates an agent response with LangChain + Ollama, then sends that response to Piper TTS.
 
 Local setup:
 

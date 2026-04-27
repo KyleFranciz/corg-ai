@@ -16,6 +16,7 @@ CHROMA_DIR = Path(CHROMA_PATH)
 CHROMA_DIR.mkdir(parents=True, exist_ok=True)
 
 
+
 class OllamaEmbeddingFunction(EmbeddingFunction[Documents]):
     def __init__(self, model: str = 'nomic-embed-text') -> None:
         self.model = model
@@ -67,6 +68,29 @@ def collection_creator(collection_name: str, description: Optional[str] = None) 
         embedding_function=embedding_function,
         metadata=metadata,
     )
+
+
+def get_collection(collection_name: str) -> Collection:
+    return chroma_client.get_collection(
+        name=collection_name,
+        embedding_function=embedding_function,
+    )
+
+
+def list_chunk_collection_names() -> list[str]:
+    collection_names: list[str] = []
+    for collection in chroma_client.list_collections():
+        name = getattr(collection, 'name', None)
+        if isinstance(collection, str):
+            name = collection
+
+        if not isinstance(name, str):
+            continue
+
+        if name == 'chunks' or name.startswith('chunks_'):
+            collection_names.append(name)
+
+    return sorted(set(collection_names))
 
 
 def get_chunks_collection(source: str) -> Collection:

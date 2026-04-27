@@ -23,14 +23,14 @@ Parent milestone for Stage 3. Encompasses all sub-tasks required to wire the RAG
 
 ### [COR-18] Build document ingestion script for ChromaDB
 - **Priority:** High
-- **Status:** In Progress
+- **Status:** Done
 - **Stage:** Stage 3
 - **Linear:** https://linear.app/faunetwork/issue/COR-18
 
 **Description:**  
 Write a Python script (`ingest.py` or similar) that reads documents from a local folder (e.g. `data/documents/`), splits them into text chunks, generates embeddings, and upserts them into the ChromaDB vector store. Support common formats: `.txt`, `.md`, and `.pdf`. This script populates the knowledge base that the RAG pipeline queries at runtime. The ingestion script must run independently of the main FastAPI app and should report how many chunks were added or updated on each run.
 
-**Progress Note (2026-04-27):**
+**Completion Note (2026-04-27):**
 - Added standalone `backend/ingest.py` for recursive `.txt`, `.md`, `.pdf` ingestion.
 - Added chunking defaults (`1000/200`), deterministic chunk IDs, and Chroma upsert summary reporting.
 - Added per-source chunk collection routing and SQLite `Documents`/`Chunks` sync during ingestion.
@@ -39,12 +39,18 @@ Write a Python script (`ingest.py` or similar) that reads documents from a local
 
 ### [COR-19] Wire ChromaDB vector search into RAG pipeline
 - **Priority:** High
-- **Status:** Todo
+- **Status:** In Progress
 - **Stage:** Stage 3
 - **Linear:** https://linear.app/faunetwork/issue/COR-19
 
 **Description:**  
 Replace any placeholder retrieval logic in the RAG pipeline with a live ChromaDB similarity search. When the pipeline receives transcribed text from faster-whisper, embed the query and perform a top-K similarity search against ChromaDB to retrieve relevant document chunks. Inject those chunks into the LLM prompt as context. The ChromaDB client must connect to the Docker-hosted instance using the correct host and port. Requires COR-18 (ingestion script) to have populated the vector store first.
+
+**Progress Note (2026-04-27):**
+- Added retrieval module (`backend/rag/retrieval.py`) that queries Chroma chunk collections and returns top-K chunk matches.
+- Wired retrieval stage into WebSocket pipeline before LLM response generation.
+- Injected retrieved chunk context into agent prompt via `services/agent/chain.py`.
+- Chroma retrieval uses local persistent vector storage via `CHROMA_PATH`.
 
 ---
 
