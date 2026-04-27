@@ -11,12 +11,18 @@ const CLOSE_CODE_HINTS: Record<number, string> = {
   1013: 'server is overloaded, retry shortly'
 }
 
-export type PipelineStage = 'connected' | 'listening' | 'transcribing' | 'speaking' | 'completed'
+export type PipelineStage =
+  | 'connected'
+  | 'listening'
+  | 'transcribing'
+  | 'responding'
+  | 'speaking'
+  | 'completed'
 
 export type PipelineEvent =
   | { type: 'ack'; action: 'start_pipeline' }
   | { type: 'status'; stage: PipelineStage; message: string }
-  | { type: 'result'; transcript: string; audio_duration_seconds: number }
+  | { type: 'result'; transcript: string; response: string; audio_duration_seconds: number }
   | { type: 'error'; stage: string; message: string }
 
 export function parsePipelineEvent(rawData: string): PipelineEvent | null {

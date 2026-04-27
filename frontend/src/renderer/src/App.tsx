@@ -16,6 +16,7 @@ function App(): React.JSX.Element {
   const [pipelineStage, setPipelineStage] = useState<PipelineStage | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [transcript, setTranscript] = useState<string | null>(null)
+  const [response, setResponse] = useState<string | null>(null)
   const [audioDuration, setAudioDuration] = useState<number | null>(null)
   const [wsError, setWsError] = useState<string | null>(null)
 
@@ -64,6 +65,7 @@ function App(): React.JSX.Element {
     setPipelineStage(null)
     setStatusMessage(null)
     setTranscript(null)
+    setResponse(null)
     setAudioDuration(null)
     setWsError(null)
 
@@ -93,6 +95,7 @@ function App(): React.JSX.Element {
           setIsRunning(true)
           setWsError(null)
           setTranscript(null)
+          setResponse(null)
           setAudioDuration(null)
           return
         }
@@ -109,6 +112,7 @@ function App(): React.JSX.Element {
 
         if (parsedEvent.type === 'result') {
           setTranscript(parsedEvent.transcript)
+          setResponse(parsedEvent.response)
           setAudioDuration(parsedEvent.audio_duration_seconds)
           return
         }
@@ -153,6 +157,7 @@ function App(): React.JSX.Element {
       </button>
 
       {transcript ? <p>Transcript: {transcript}</p> : null}
+      {response ? <p>Response: {response}</p> : null}
       {audioDuration !== null ? <p>Audio duration: {audioDuration}s</p> : null}
       {wsError ? <p>{wsError}</p> : null}
     </>

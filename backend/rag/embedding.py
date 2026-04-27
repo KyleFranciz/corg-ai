@@ -1,10 +1,10 @@
 import os
-
 import ollama
 
 # NOTE: MIGHT RE-EMBED ALL THE EMBEDDING WITH A DIFFERENT MODEL LATER ON
 
 
+# env for the ollama server
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434")
 ollama_client = ollama.Client(host=OLLAMA_HOST)
 
