@@ -102,6 +102,7 @@ function App(): React.JSX.Element {
           setStatusMessage(parsedEvent.message)
           if (parsedEvent.stage === 'completed') {
             setIsRunning(false)
+            socket.close(1000, 'Pipeline completed')
           }
           return
         }
