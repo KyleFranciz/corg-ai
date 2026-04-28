@@ -18,7 +18,9 @@ function getValidatedBackendUrl(): string {
 
   const hostname = parsed.hostname.toLowerCase()
   if (!LOCAL_BACKEND_HOSTS.has(hostname)) {
-    throw new Error(`VITE_BACKEND_URL must be localhost/loopback for offline mode: ${rawBackendUrl}`)
+    throw new Error(
+      `VITE_BACKEND_URL must be localhost/loopback for offline mode: ${rawBackendUrl}`
+    )
   }
 
   return rawBackendUrl

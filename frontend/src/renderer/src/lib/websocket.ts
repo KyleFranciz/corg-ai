@@ -17,29 +17,160 @@ export type PipelineStage =
   | 'connected'
   | 'listening'
   | 'transcribing'
+  | 'retrieving'
   | 'responding'
   | 'speaking'
   | 'completed'
 
+export type PipelineStatusState = 'connected' | 'started' | 'completed' | 'failed'
+
 export type PipelineEvent =
-  | { type: 'ack'; action: 'start_pipeline' }
-  | { type: 'status'; stage: PipelineStage; message: string }
-  | { type: 'result'; transcript: string; response: string; audio_duration_seconds: number }
-  | { type: 'error'; stage: string; message: string }
+  | { type: 'ack'; session_id: number; action: 'start_pipeline' }
+  | {
+      type: 'status'
+      session_id: number
+      stage: PipelineStage
+      state: PipelineStatusState
+      message: string
+      details: Record<string, unknown>
+      timestamp: string
+    }
+  | {
+      type: 'result'
+      session_id: number
+      transcript: string
+      response: string
+      audio_duration_seconds: number
+      retrieved_context_count: number
+      timings: Record<string, number>
+      total_seconds: number
+    }
+  | {
+      type: 'error'
+      session_id: number
+      stage: string
+      message: string
+      timings?: Record<string, number>
+      total_seconds?: number
+    }
+
+const PIPELINE_STAGES: Set<PipelineStage> = new Set([
+  'connected',
+  'listening',
+  'transcribing',
+  'retrieving',
+  'responding',
+  'speaking',
+  'completed'
+])
+
+const PIPELINE_STATUS_STATES: Set<PipelineStatusState> = new Set([
+  'connected',
+  'started',
+  'completed',
+  'failed'
+])
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isNumberRecord(value: unknown): value is Record<string, number> {
+  return isRecord(value) && Object.values(value).every(isNumber)
+}
+
+function isPipelineStage(value: unknown): value is PipelineStage {
+  return typeof value === 'string' && PIPELINE_STAGES.has(value as PipelineStage)
+}
+
+function isPipelineStatusState(value: unknown): value is PipelineStatusState {
+  return typeof value === 'string' && PIPELINE_STATUS_STATES.has(value as PipelineStatusState)
+}
 
 export function parsePipelineEvent(rawData: string): PipelineEvent | null {
   try {
     const event = JSON.parse(rawData)
-    if (!event || typeof event !== 'object' || !('type' in event)) {
+    if (!isRecord(event) || typeof event.type !== 'string' || !isNumber(event.session_id)) {
       return null
     }
 
-    const eventType = event.type
-    if (eventType !== 'ack' && eventType !== 'status' && eventType !== 'result' && eventType !== 'error') {
-      return null
+    if (event.type === 'ack') {
+      if (event.action !== 'start_pipeline') {
+        return null
+      }
+
+      return {
+        type: 'ack',
+        session_id: event.session_id,
+        action: 'start_pipeline'
+      }
     }
 
-    return event as PipelineEvent
+    if (event.type === 'status') {
+      if (
+        !isPipelineStage(event.stage) ||
+        !isPipelineStatusState(event.state) ||
+        typeof event.message !== 'string' ||
+        typeof event.timestamp !== 'string'
+      ) {
+        return null
+      }
+
+      return {
+        type: 'status',
+        session_id: event.session_id,
+        stage: event.stage,
+        state: event.state,
+        message: event.message,
+        details: isRecord(event.details) ? event.details : {},
+        timestamp: event.timestamp
+      }
+    }
+
+    if (event.type === 'result') {
+      if (
+        typeof event.transcript !== 'string' ||
+        typeof event.response !== 'string' ||
+        !isNumber(event.audio_duration_seconds) ||
+        !isNumber(event.retrieved_context_count) ||
+        !isNumberRecord(event.timings) ||
+        !isNumber(event.total_seconds)
+      ) {
+        return null
+      }
+
+      return {
+        type: 'result',
+        session_id: event.session_id,
+        transcript: event.transcript,
+        response: event.response,
+        audio_duration_seconds: event.audio_duration_seconds,
+        retrieved_context_count: event.retrieved_context_count,
+        timings: event.timings,
+        total_seconds: event.total_seconds
+      }
+    }
+
+    if (event.type === 'error') {
+      if (typeof event.stage !== 'string' || typeof event.message !== 'string') {
+        return null
+      }
+
+      return {
+        type: 'error',
+        session_id: event.session_id,
+        stage: event.stage,
+        message: event.message,
+        timings: isNumberRecord(event.timings) ? event.timings : undefined,
+        total_seconds: isNumber(event.total_seconds) ? event.total_seconds : undefined
+      }
+    }
+
+    return null
   } catch {
     return null
   }
@@ -63,7 +194,9 @@ function normalizeBackendUrl(rawBackendUrl: string): URL {
   }
 
   if (!LOCAL_BACKEND_HOSTS.has(backendUrl.hostname.toLowerCase())) {
-    throw new Error(`VITE_BACKEND_URL must be localhost/loopback for offline mode: ${rawBackendUrl}`)
+    throw new Error(
+      `VITE_BACKEND_URL must be localhost/loopback for offline mode: ${rawBackendUrl}`
+    )
   }
 
   return backendUrl
@@ -129,69 +262,4 @@ export function describeWebSocketClose(event: CloseEvent): string {
   }
 
   return `WebSocket closed (code ${event.code}: ${hint})`
-}
-
-export function testWebSocketConnection(): Promise<string> {
-  const websocketUrl = getWebSocketUrl()
-
-  return new Promise((resolve, reject) => {
-    const socket = new WebSocket(websocketUrl)
-    let settled = false
-
-    const timeout = window.setTimeout(() => {
-      if (settled) {
-        return
-      }
-
-      settled = true
-      socket.close()
-      reject(new Error(`WebSocket connection timed out: ${websocketUrl}`))
-    }, CONNECTION_TIMEOUT_MS)
-
-    socket.onopen = (): void => {
-      console.log('[ws] connected', websocketUrl)
-    }
-
-    socket.onmessage = (event: MessageEvent): void => {
-      console.log('[ws] message', event.data)
-
-      if (settled) {
-        return
-      }
-
-      settled = true
-      window.clearTimeout(timeout)
-      resolve(event.data)
-      socket.close()
-    }
-
-    socket.onerror = (): void => {
-      console.error('[ws] connection error', websocketUrl)
-
-      if (settled) {
-        return
-      }
-
-      settled = true
-      window.clearTimeout(timeout)
-      reject(new Error(`WebSocket connection failed: ${websocketUrl}`))
-      socket.close()
-    }
-
-    socket.onclose = (event: CloseEvent): void => {
-      console.log('[ws] closed', event.code, event.reason)
-
-      if (settled) {
-        return
-      }
-
-      settled = true
-      window.clearTimeout(timeout)
-      reject(
-        new Error(
-          `WebSocket closed before receiving a message (code ${event.code}${event.reason ? `, reason: ${event.reason}` : ''}): ${websocketUrl}`
-        )
-      )
-    }
-  })
 }
