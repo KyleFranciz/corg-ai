@@ -1,0 +1,25 @@
+export type ConversationMessage = {
+  id: number | null
+  role: 'user' | 'agent'
+  content: string
+  created_at: string | null
+  audio_path: string | null
+}
+
+export type ConversationSession = {
+  session_id: number | null
+  started_at: string | null
+  ended_at: string | null
+  summary: string | null
+  last_message_at: string | null
+  message_count: number
+  messages: ConversationMessage[]
+}
+
+export type ConversationsResponse = {
+  conversations: ConversationSession[]
+}
+
+export type ConversationResponse = {
+  conversation: ConversationSession
+}

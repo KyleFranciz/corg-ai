@@ -8,6 +8,7 @@ import {
 } from '@tanstack/react-router'
 import App from './App'
 import { AboutRoute } from './routes/AboutRoute'
+import { ConversationRoute } from './routes/ConversationRoute'
 
 type RouterContext = {
   queryClient: QueryClient
@@ -29,7 +30,13 @@ const aboutRoute = createRoute({
   component: AboutRoute
 })
 
-const routeTree = rootRoute.addChildren([homeRoute, aboutRoute])
+const conversationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/conversation/$conversationId',
+  component: ConversationRoute
+})
+
+const routeTree = rootRoute.addChildren([homeRoute, aboutRoute, conversationRoute])
 
 export const createAppRouter = (queryClient: QueryClient): ReturnType<typeof createRouter> =>
   createRouter({

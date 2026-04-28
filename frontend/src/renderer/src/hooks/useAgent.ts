@@ -9,6 +9,10 @@ import {
   type PipelineStatusState
 } from '@renderer/lib/websocket'
 
+const MAX_RECONNECT_ATTEMPTS = 5
+const BASE_RECONNECT_DELAY_MS = 1000
+const MAX_RECONNECT_DELAY_MS = 8000
+
 export type AgentConnectionState = 'idle' | 'connecting' | 'connected' | 'closed' | 'error'
 export type AgentStatus = 'idle' | 'listening' | 'thinking' | 'speaking'
 
@@ -23,10 +27,22 @@ export type UseAgentResult = {
   transcript: string | null
   response: string | null
   audioDuration: number | null
+  history: ConversationTurn[]
   wsError: string | null
+  reconnectAttempt: number
   connect: () => Promise<void>
   startPipeline: () => Promise<void>
   disconnect: () => void
+}
+
+export type ConversationTurn = {
+  sessionId: number
+  transcript: string
+  response: string
+  audioDurationSeconds: number
+  retrievedContextCount: number
+  totalSeconds: number
+  timestamp: string
 }
 
 function mapStageToAgentStatus(stage: PipelineStage | null): AgentStatus {
@@ -45,23 +61,10 @@ function mapStageToAgentStatus(stage: PipelineStage | null): AgentStatus {
   return 'idle'
 }
 
-function formatPipelineError(stage: string, message: string): string {
-  const normalized = message.toLowerCase()
-
-  if (
-    normalized.includes('error querying device -1') ||
-    normalized.includes('no default input device') ||
-    normalized.includes('invalid input device')
-  ) {
-    return `[${stage}] ${message}. Hint: no default microphone was detected. Select/set a valid input device on your host OS and retry.`
-  }
-
-  return `[${stage}] ${message}`
-}
-
 export function useAgent(): UseAgentResult {
   const socketRef = useRef<WebSocket | null>(null)
   const connectPromiseRef = useRef<Promise<void> | null>(null)
+  const connectFnRef = useRef<(() => Promise<void>) | null>(null)
 
   const [connectionState, setConnectionState] = useState<AgentConnectionState>('idle')
   const [isRunning, setIsRunning] = useState(false)
@@ -71,7 +74,14 @@ export function useAgent(): UseAgentResult {
   const [transcript, setTranscript] = useState<string | null>(null)
   const [response, setResponse] = useState<string | null>(null)
   const [audioDuration, setAudioDuration] = useState<number | null>(null)
+  const [history, setHistory] = useState<ConversationTurn[]>([])
   const [wsError, setWsError] = useState<string | null>(null)
+  const [reconnectAttempt, setReconnectAttempt] = useState(0)
+
+  const reconnectAttemptRef = useRef(0)
+  const intentionallyDisconnectedRef = useRef(false)
+  const reconnectTimeoutRef = useRef<number | null>(null)
+  const shouldReconnectRef = useRef(false)
 
   const websocketTarget = (() => {
     try {
@@ -86,6 +96,143 @@ export function useAgent(): UseAgentResult {
     connectPromiseRef.current = null
   }, [])
 
+  const attemptConnect = useCallback(async (): Promise<boolean> => {
+    try {
+      await verifyBackendHealth()
+    } catch {
+      return false
+    }
+
+    return new Promise((resolve) => {
+      const socket = new WebSocket(websocketTarget)
+      socketRef.current = socket
+
+      let settled = false
+
+      socket.onopen = () => {
+        setConnectionState('connected')
+        setWsError(null)
+        reconnectAttemptRef.current = 0
+        setReconnectAttempt(0)
+        if (!settled) {
+          settled = true
+          resolve(true)
+        }
+      }
+
+      socket.onmessage = (event) => {
+        const pipelineEvent = parsePipelineEvent(event.data)
+        if (!pipelineEvent) {
+          return
+        }
+
+        if (pipelineEvent.type === 'status') {
+          setPipelineStage(pipelineEvent.stage)
+          setPipelineState(pipelineEvent.state)
+          setStatusMessage(pipelineEvent.message)
+
+          if (pipelineEvent.state === 'failed') {
+            setIsRunning(false)
+          }
+
+          return
+        }
+
+        if (pipelineEvent.type === 'result') {
+          setTranscript(pipelineEvent.transcript)
+          setResponse(pipelineEvent.response)
+          setAudioDuration(pipelineEvent.audio_duration_seconds)
+          setIsRunning(false)
+          setHistory((previous) => [
+            ...previous,
+            {
+              sessionId: pipelineEvent.session_id,
+              transcript: pipelineEvent.transcript,
+              response: pipelineEvent.response,
+              audioDurationSeconds: pipelineEvent.audio_duration_seconds,
+              retrievedContextCount: pipelineEvent.retrieved_context_count,
+              totalSeconds: pipelineEvent.total_seconds,
+              timestamp: new Date().toISOString()
+            }
+          ])
+          return
+        }
+
+        if (pipelineEvent.type === 'error') {
+          setIsRunning(false)
+          setPipelineState('failed')
+          setStatusMessage(pipelineEvent.message)
+          setWsError(pipelineEvent.message)
+        }
+      }
+
+      socket.onerror = () => {
+        setConnectionState('error')
+        setWsError('WebSocket encountered an unexpected error')
+      }
+
+      socket.onclose = (event) => {
+        cleanupSocketRef()
+
+        if (intentionallyDisconnectedRef.current || !shouldReconnectRef.current) {
+          setConnectionState('closed')
+          if (!settled) {
+            settled = true
+            resolve(false)
+          }
+          return
+        }
+
+        const attempt = reconnectAttemptRef.current
+        if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+          setConnectionState('error')
+          setIsRunning(false)
+          setWsError(
+            `Connection lost after ${MAX_RECONNECT_ATTEMPTS} attempts. ${describeWebSocketClose(event)}`
+          )
+          if (!settled) {
+            settled = true
+            resolve(false)
+          }
+          return
+        }
+
+        const delay = Math.min(
+          BASE_RECONNECT_DELAY_MS * Math.pow(2, attempt),
+          MAX_RECONNECT_DELAY_MS
+        )
+        reconnectAttemptRef.current = attempt + 1
+        setReconnectAttempt(attempt + 1)
+        setConnectionState('connecting')
+        setWsError(describeWebSocketClose(event))
+
+        reconnectTimeoutRef.current = window.setTimeout(async () => {
+          const reconnect = connectFnRef.current
+          if (!reconnect) {
+            if (!settled) {
+              settled = true
+              resolve(false)
+            }
+            return
+          }
+
+          try {
+            await reconnect()
+            if (!settled) {
+              settled = true
+              resolve(true)
+            }
+          } catch {
+            if (!settled) {
+              settled = true
+              resolve(false)
+            }
+          }
+        }, delay)
+      }
+    })
+  }, [websocketTarget, cleanupSocketRef])
+
   const connect = useCallback(async (): Promise<void> => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       return
@@ -97,100 +244,19 @@ export function useAgent(): UseAgentResult {
 
     setConnectionState('connecting')
     setWsError(null)
+    reconnectAttemptRef.current = 0
+    setReconnectAttempt(0)
+    intentionallyDisconnectedRef.current = false
+    shouldReconnectRef.current = true
 
-    const connectPromise = (async () => {
-      await verifyBackendHealth()
-
-      await new Promise<void>((resolve, reject) => {
-        const socket = new WebSocket(websocketTarget)
-        socketRef.current = socket
-
-        let settled = false
-
-        socket.onopen = (): void => {
-          setConnectionState('connected')
-          if (!settled) {
-            settled = true
-            resolve()
-          }
-        }
-
-        socket.onmessage = (event: MessageEvent): void => {
-          const rawData = typeof event.data === 'string' ? event.data : null
-          if (!rawData) {
-            return
-          }
-
-          const parsedEvent = parsePipelineEvent(rawData)
-          if (!parsedEvent) {
-            return
-          }
-
-          if (parsedEvent.type === 'ack') {
-            setWsError(null)
-            return
-          }
-
-          if (parsedEvent.type === 'status') {
-            setPipelineStage(parsedEvent.stage)
-            setPipelineState(parsedEvent.state)
-            setStatusMessage(parsedEvent.message)
-
-            if (parsedEvent.state === 'failed') {
-              setIsRunning(false)
-              setWsError(formatPipelineError(parsedEvent.stage, parsedEvent.message))
-            }
-
-            if (parsedEvent.stage === 'completed' && parsedEvent.state === 'completed') {
-              setIsRunning(false)
-            }
-
-            return
-          }
-
-          if (parsedEvent.type === 'result') {
-            setTranscript(parsedEvent.transcript)
-            setResponse(parsedEvent.response)
-            setAudioDuration(parsedEvent.audio_duration_seconds)
-            return
-          }
-
-          setIsRunning(false)
-          setWsError(formatPipelineError(parsedEvent.stage, parsedEvent.message))
-        }
-
-        socket.onerror = (): void => {
-          setConnectionState('error')
-          setIsRunning(false)
-          setWsError('WebSocket connection failed')
-
-          if (!settled) {
-            settled = true
-            reject(new Error('WebSocket connection failed'))
-          }
-        }
-
-        socket.onclose = (event: CloseEvent): void => {
-          setConnectionState('closed')
-          setIsRunning(false)
-          cleanupSocketRef()
-
-          if (event.code !== 1000) {
-            setWsError(`${describeWebSocketClose(event)}. Click Start to reconnect.`)
-          }
-
-          if (!settled) {
-            settled = true
-            reject(new Error(describeWebSocketClose(event)))
-          }
-        }
-      })
+    const promise = (async () => {
+      await attemptConnect()
     })()
 
-    connectPromiseRef.current = connectPromise
+    connectPromiseRef.current = promise
 
     try {
-      await connectPromise
+      await promise
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Failed to connect to backend WebSocket'
@@ -201,7 +267,11 @@ export function useAgent(): UseAgentResult {
     } finally {
       connectPromiseRef.current = null
     }
-  }, [cleanupSocketRef, websocketTarget])
+  }, [attemptConnect, cleanupSocketRef])
+
+  useEffect(() => {
+    connectFnRef.current = connect
+  }, [connect])
 
   const startPipeline = useCallback(async (): Promise<void> => {
     if (isRunning) {
@@ -235,19 +305,38 @@ export function useAgent(): UseAgentResult {
   }, [connect, isRunning])
 
   const disconnect = useCallback((): void => {
-    const socket = socketRef.current
-    if (!socket) {
-      return
+    intentionallyDisconnectedRef.current = true
+    shouldReconnectRef.current = false
+
+    if (reconnectTimeoutRef.current !== null) {
+      window.clearTimeout(reconnectTimeoutRef.current)
+      reconnectTimeoutRef.current = null
     }
 
-    socket.close(1000, 'Disconnected by client')
+    const socket = socketRef.current
+    if (socket) {
+      socket.close(1000, 'Disconnected by client')
+    }
+
     cleanupSocketRef()
+    reconnectAttemptRef.current = 0
+    setReconnectAttempt(0)
     setConnectionState('closed')
     setIsRunning(false)
+    setPipelineState(null)
+    setPipelineStage(null)
+    setStatusMessage('Disconnected')
   }, [cleanupSocketRef])
 
   useEffect(() => {
     return () => {
+      intentionallyDisconnectedRef.current = true
+      shouldReconnectRef.current = false
+
+      if (reconnectTimeoutRef.current !== null) {
+        window.clearTimeout(reconnectTimeoutRef.current)
+      }
+
       if (socketRef.current) {
         socketRef.current.close(1000, 'Component unmounted')
       }
@@ -266,7 +355,9 @@ export function useAgent(): UseAgentResult {
     transcript,
     response,
     audioDuration,
+    history,
     wsError,
+    reconnectAttempt,
     connect,
     startPipeline,
     disconnect

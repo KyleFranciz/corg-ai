@@ -1,5 +1,10 @@
 body {
-  justify-items: center;
-  justify-items: center;
+  margin: 0;
   background-color: #fbfaf2;
+  color: #232018;
+  font-family: 'IBM Plex Sans', sans-serif;
+}
+
+#root {
+  min-height: 100vh;
 }
