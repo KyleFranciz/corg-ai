@@ -4,36 +4,55 @@ import json
 import logging
 import time
 from datetime import datetime, timezone
+from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlmodel import desc, select
 from sqlmodel import Session as DbSession
 
-from database.database_engine import engine, AUDIO_DIR
-from database.models import Messages, MessageRole
+from database.database_engine import AUDIO_DIR, engine
+from database.models import MessageRole, Messages
 from database.models import Session as SessionRecord
-from services.agent import AgentHistoryMessage, generate_agent_response, get_history_limit, retrieve_context
+from services.agent import (
+    AgentHistoryMessage,
+    generate_agent_response,
+    get_history_limit,
+    retrieve_context,
+)
 from services.audio_transcription.pipeline import record_audio_until_silent
 from services.audio_transcription.pipeline import speak_response
 from services.audio_transcription.pipeline import transcribe_audio
 from services.websocket.connection_manager import ConnectionManager
 
-
-router = APIRouter(tags=["websocket"])
-compat_router = APIRouter(tags=["websocket"])
+router = APIRouter(tags=['websocket'])
+compat_router = APIRouter(tags=['websocket'])
 manager = ConnectionManager()
 logger = logging.getLogger(__name__)
 
 
-# send updates on the current status of the socket
-async def _send_status(websocket: WebSocket, stage: str, message: str) -> None:
+async def _send_status(
+    websocket: WebSocket,
+    session_id: int,
+    stage: str,
+    state: str,
+    message: str,
+    details: dict[str, Any] | None = None,
+) -> None:
     await manager.send_personal_json(
-        {"type": "status", "stage": stage, "message": message}, websocket
+        {
+            'type': 'status',
+            'session_id': session_id,
+            'stage': stage,
+            'state': state,
+            'message': message,
+            'details': details or {},
+            'timestamp': datetime.now(timezone.utc).isoformat(),
+        },
+        websocket,
     )
 
 
-# function to help with parsing the commands we get through websocket
 def _parse_command(raw_message: str) -> str | None:
     message = raw_message.strip()
     if not message:
@@ -43,12 +62,12 @@ def _parse_command(raw_message: str) -> str | None:
         payload = json.loads(message)
     except json.JSONDecodeError:
         plain_action = message.lower()
-        if plain_action in {"start", "run", "start_pipeline"}:
-            return "start_pipeline"
+        if plain_action in {'start', 'run', 'start_pipeline'}:
+            return 'start_pipeline'
         return None
 
     if isinstance(payload, dict):
-        action = payload.get("action")
+        action = payload.get('action')
         if isinstance(action, str):
             return action.strip().lower()
 
@@ -85,36 +104,80 @@ def _fetch_recent_history(session_id: int, db: DbSession) -> list[AgentHistoryMe
 
 
 async def _run_audio_pipeline(
-    websocket: WebSocket, session_id: int, db: DbSession
-) -> str | None:
+    websocket: WebSocket,
+    session_id: int,
+    db: DbSession,
+) -> dict[str, Any] | None:
     pipeline_started_at = time.perf_counter()
-    stage = "listening"
+    stage = 'listening'
+    stage_timings: dict[str, float] = {}
+
     try:
         logger.info('Pipeline started session_id=%s', session_id)
 
         stage_started_at = time.perf_counter()
-        await _send_status(websocket, "listening", "Listening for speech")
+        await _send_status(
+            websocket,
+            session_id,
+            'listening',
+            'started',
+            'Listening for speech',
+        )
         audio = await asyncio.to_thread(record_audio_until_silent)
+        stage_timings['listening_seconds'] = round(
+            time.perf_counter() - stage_started_at,
+            3,
+        )
         logger.info(
             'Pipeline stage completed session_id=%s stage=%s duration_seconds=%.3f audio_samples=%s',
             session_id,
             stage,
-            time.perf_counter() - stage_started_at,
+            stage_timings['listening_seconds'],
             audio.shape[0],
         )
+        await _send_status(
+            websocket,
+            session_id,
+            'listening',
+            'completed',
+            'Speech captured',
+            details={'duration_seconds': stage_timings['listening_seconds']},
+        )
 
-        stage = "transcribing"
+        stage = 'transcribing'
         stage_started_at = time.perf_counter()
         await _send_status(
-            websocket, "transcribing", "Transcribing speech with faster-whisper"
+            websocket,
+            session_id,
+            'transcribing',
+            'started',
+            'Transcribing speech with faster-whisper',
         )
         transcript = await asyncio.to_thread(transcribe_audio, audio)
+        if not transcript.strip():
+            raise RuntimeError('Transcription produced empty text')
+
+        stage_timings['transcribing_seconds'] = round(
+            time.perf_counter() - stage_started_at,
+            3,
+        )
         logger.info(
             'Pipeline stage completed session_id=%s stage=%s duration_seconds=%.3f transcript_chars=%s',
             session_id,
             stage,
-            time.perf_counter() - stage_started_at,
+            stage_timings['transcribing_seconds'],
             len(transcript),
+        )
+        await _send_status(
+            websocket,
+            session_id,
+            'transcribing',
+            'completed',
+            'Transcription completed',
+            details={
+                'duration_seconds': stage_timings['transcribing_seconds'],
+                'transcript_chars': len(transcript),
+            },
         )
 
         history = _fetch_recent_history(session_id, db)
@@ -126,50 +189,117 @@ async def _run_audio_pipeline(
         )
         db.add(user_msg)
         db.commit()
-        logger.info('Stored user transcript session_id=%s transcript_chars=%s', session_id, len(transcript))
+        logger.info(
+            'Stored user transcript session_id=%s transcript_chars=%s',
+            session_id,
+            len(transcript),
+        )
 
-        stage = "retrieving"
+        stage = 'retrieving'
         stage_started_at = time.perf_counter()
-        await _send_status(websocket, "retrieving", "Retrieving context from ChromaDB")
+        await _send_status(
+            websocket,
+            session_id,
+            'retrieving',
+            'started',
+            'Retrieving context from ChromaDB',
+        )
         retrieved_chunks = await asyncio.to_thread(retrieve_context, transcript)
+        stage_timings['retrieving_seconds'] = round(
+            time.perf_counter() - stage_started_at,
+            3,
+        )
         logger.info(
             'Pipeline stage completed session_id=%s stage=%s duration_seconds=%.3f retrieved_chunks=%s',
             session_id,
             stage,
-            time.perf_counter() - stage_started_at,
+            stage_timings['retrieving_seconds'],
             len(retrieved_chunks),
         )
+        await _send_status(
+            websocket,
+            session_id,
+            'retrieving',
+            'completed',
+            'Context retrieval completed',
+            details={
+                'duration_seconds': stage_timings['retrieving_seconds'],
+                'retrieved_context_count': len(retrieved_chunks),
+            },
+        )
 
-        stage = "responding"
+        stage = 'responding'
         stage_started_at = time.perf_counter()
-        await _send_status(websocket, "responding", "Generating agent response with Ollama")
+        await _send_status(
+            websocket,
+            session_id,
+            'responding',
+            'started',
+            'Generating agent response with Ollama',
+        )
         response_text = await asyncio.to_thread(
             generate_agent_response,
             transcript,
             history,
             retrieved_chunks,
         )
+        stage_timings['responding_seconds'] = round(
+            time.perf_counter() - stage_started_at,
+            3,
+        )
         logger.info(
             'Pipeline stage completed session_id=%s stage=%s duration_seconds=%.3f response_chars=%s',
             session_id,
             stage,
-            time.perf_counter() - stage_started_at,
+            stage_timings['responding_seconds'],
             len(response_text),
         )
+        await _send_status(
+            websocket,
+            session_id,
+            'responding',
+            'completed',
+            'Agent response generated',
+            details={
+                'duration_seconds': stage_timings['responding_seconds'],
+                'response_chars': len(response_text),
+            },
+        )
 
-        stage = "speaking"
+        stage = 'speaking'
         stage_started_at = time.perf_counter()
-        await _send_status(websocket, "speaking", "Speaking agent response with Piper")
-        audio_path = str(AUDIO_DIR / f"{uuid4()}.wav")
+        await _send_status(
+            websocket,
+            session_id,
+            'speaking',
+            'started',
+            'Speaking agent response with Piper',
+        )
+        audio_path = str(AUDIO_DIR / f'{uuid4()}.wav')
         await asyncio.to_thread(
             functools.partial(speak_response, response_text, save_path=audio_path)
+        )
+        stage_timings['speaking_seconds'] = round(
+            time.perf_counter() - stage_started_at,
+            3,
         )
         logger.info(
             'Pipeline stage completed session_id=%s stage=%s duration_seconds=%.3f audio_path=%s',
             session_id,
             stage,
-            time.perf_counter() - stage_started_at,
+            stage_timings['speaking_seconds'],
             audio_path,
+        )
+        await _send_status(
+            websocket,
+            session_id,
+            'speaking',
+            'completed',
+            'Audio playback completed',
+            details={
+                'duration_seconds': stage_timings['speaking_seconds'],
+                'audio_path': audio_path,
+            },
         )
 
         msg = Messages(
@@ -180,92 +310,134 @@ async def _run_audio_pipeline(
         )
         db.add(msg)
         db.commit()
-        logger.info('Stored agent response session_id=%s response_chars=%s', session_id, len(response_text))
+        logger.info(
+            'Stored agent response session_id=%s response_chars=%s',
+            session_id,
+            len(response_text),
+        )
 
+        total_seconds = round(time.perf_counter() - pipeline_started_at, 3)
         await manager.send_personal_json(
             {
-                "type": "result",
-                "transcript": transcript,
-                "response": response_text,
-                "audio_duration_seconds": round(float(audio.shape[0] / 16000), 3),
-                "retrieved_context_count": len(retrieved_chunks),
+                'type': 'result',
+                'session_id': session_id,
+                'transcript': transcript,
+                'response': response_text,
+                'audio_duration_seconds': round(float(audio.shape[0] / 16000), 3),
+                'retrieved_context_count': len(retrieved_chunks),
+                'timings': stage_timings,
+                'total_seconds': total_seconds,
             },
             websocket,
         )
-        await _send_status(websocket, "completed", "Pipeline completed")
-        logger.info(
-            'Pipeline completed session_id=%s total_seconds=%.3f',
+        await _send_status(
+            websocket,
             session_id,
-            time.perf_counter() - pipeline_started_at,
+            'completed',
+            'completed',
+            'Pipeline completed',
+            details={'timings': stage_timings, 'total_seconds': total_seconds},
         )
-        return transcript
+        logger.info(
+            'Pipeline completed session_id=%s total_seconds=%.3f timings=%s',
+            session_id,
+            total_seconds,
+            stage_timings,
+        )
+
+        return {
+            'transcript': transcript,
+            'response': response_text,
+            'retrieved_context_count': len(retrieved_chunks),
+            'timings': stage_timings,
+            'total_seconds': total_seconds,
+        }
     except Exception as error:
         logger.exception('Pipeline failed session_id=%s stage=%s', session_id, stage)
         error_message = str(error)
+        elapsed_seconds = round(time.perf_counter() - pipeline_started_at, 3)
 
         await manager.send_personal_json(
-            {"type": "error", "stage": stage, "message": error_message}, websocket
+            {
+                'type': 'error',
+                'session_id': session_id,
+                'stage': stage,
+                'message': error_message,
+                'timings': stage_timings,
+                'total_seconds': elapsed_seconds,
+            },
+            websocket,
+        )
+        await _send_status(
+            websocket,
+            session_id,
+            stage,
+            'failed',
+            error_message,
+            details={'timings': stage_timings, 'total_seconds': elapsed_seconds},
         )
         return None
 
 
-# func to help with controlling the websocket
 async def _handle_websocket(websocket: WebSocket) -> None:
     logger.info('WebSocket connection request received')
     await manager.connect(websocket)
-    await manager.send_personal_json(
-        {
-            "type": "status",
-            "stage": "connected",
-            "message": "Connected to FastAPI WebSocket",
-        },
-        websocket,
-    )
 
-    # access the database and use it create a sessionID for each new conversation
     with DbSession(engine) as db:
-        # create session record to store in the db
         session_record = SessionRecord()
         db.add(session_record)
         db.commit()
         db.refresh(session_record)
         session_id = session_record.id
+
+        await _send_status(
+            websocket,
+            session_id,
+            'connected',
+            'connected',
+            'Connected to FastAPI WebSocket',
+        )
+
         logger.info('WebSocket session created session_id=%s', session_id)
         last_transcript: str | None = None
 
         try:
-            # handle the clean up
             while True:
                 message = await websocket.receive_text()
                 action = _parse_command(message)
 
-                if action != "start_pipeline":
-                    logger.warning('Unknown WebSocket action session_id=%s raw=%s', session_id, message)
+                if action != 'start_pipeline':
+                    logger.warning(
+                        'Unknown WebSocket action session_id=%s raw=%s',
+                        session_id,
+                        message,
+                    )
                     await manager.send_personal_json(
                         {
-                            "type": "error",
-                            "stage": "command",
-                            "message": 'Unknown command. Use {"action":"start_pipeline"}.',
+                            'type': 'error',
+                            'session_id': session_id,
+                            'stage': 'command',
+                            'message': 'Unknown command. Use {"action":"start_pipeline"}.',
                         },
                         websocket,
                     )
                     continue
 
                 await manager.send_personal_json(
-                    {"type": "ack", "action": "start_pipeline"}, websocket
+                    {'type': 'ack', 'session_id': session_id, 'action': 'start_pipeline'},
+                    websocket,
                 )
                 logger.info('Pipeline trigger acknowledged session_id=%s', session_id)
-                transcript = await _run_audio_pipeline(websocket, session_id, db)
-                if transcript:
-                    last_transcript = transcript
+                pipeline_result = await _run_audio_pipeline(websocket, session_id, db)
+                if pipeline_result:
+                    last_transcript = pipeline_result['transcript']
         except WebSocketDisconnect:
             logger.info('WebSocket disconnected session_id=%s', session_id)
-            pass
         finally:
             manager.disconnect(websocket)
 
             session_record.ended_at = datetime.now(timezone.utc)
-            session_record.summary = last_transcript or "No transcript captured"
+            session_record.summary = last_transcript or 'No transcript captured'
 
             try:
                 db.add(session_record)
@@ -273,14 +445,17 @@ async def _handle_websocket(websocket: WebSocket) -> None:
                 logger.info('WebSocket session closed session_id=%s', session_id)
             except Exception:
                 db.rollback()
-                logger.exception('Failed to persist WebSocket session closure session_id=%s', session_id)
+                logger.exception(
+                    'Failed to persist WebSocket session closure session_id=%s',
+                    session_id,
+                )
 
 
-@router.websocket("/ws")
+@router.websocket('/ws')
 async def websocket_endpoint(websocket: WebSocket) -> None:
     await _handle_websocket(websocket)
 
 
-@compat_router.websocket("/ws")
+@compat_router.websocket('/ws')
 async def websocket_endpoint_compat(websocket: WebSocket) -> None:
     await _handle_websocket(websocket)

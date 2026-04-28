@@ -58,12 +58,18 @@ Replace any placeholder retrieval logic in the RAG pipeline with a live ChromaDB
 
 ### [COR-12] Connect RAG and LLM pipeline to STT output
 - **Priority:** High
-- **Status:** Todo
+- **Status:** Done
 - **Stage:** Stage 3
 - **Linear:** https://linear.app/faunetwork/issue/COR-12
 
 **Description:**  
 Connect the transcribed text output from faster-whisper into the existing RAG pipeline. The LLM response should feed directly into Piper TTS. Replace the hardcoded response from Stage 2 with live RAG output. Each turn of the pipeline — transcription → retrieval → LLM → TTS — must execute sequentially and emit WebSocket status events so the frontend can track progress in real time. Retrieval and generation must run locally (ChromaDB + local Ollama) with no external API dependency.
+
+**Completion Note (2026-04-28):**
+- Hardened websocket pipeline ordering with explicit staged execution: `listening → transcribing → retrieving → responding → speaking`.
+- Ensured live RAG path is used for generation (transcript + retrieved chunks passed to `generate_agent_response` before TTS).
+- Normalized websocket payloads with deterministic `status` events (`started/completed/failed`) and enriched `result`/`error` payload metadata.
+- Added per-stage timing and total runtime metrics for pipeline observability and local debugging.
 
 ---
 
