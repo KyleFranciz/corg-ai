@@ -20,6 +20,10 @@ class RetrievedChunk(TypedDict):
 
 
 def _read_top_k() -> int:
+    """
+    Reads the number of chunks to retrieve per query from the CORG_RAG_TOP_K env var.
+    Falls back to DEFAULT_RETRIEVAL_TOP_K if unset or invalid.
+    """
     raw_value = os.getenv('CORG_RAG_TOP_K')
     if raw_value is None:
         return DEFAULT_RETRIEVAL_TOP_K
@@ -33,6 +37,11 @@ def _read_top_k() -> int:
 
 
 def retrieve_relevant_chunks(query: str, top_k: int | None = None) -> list[RetrievedChunk]:
+    """
+    Queries all Chroma chunk collections for text chunks most relevant to the given query.
+    Each collection is searched independently, results are merged, sorted by semantic
+    distance, and the top-K are returned. Skips collections that fail without aborting.
+    """
     clean_query = query.strip()
     if not clean_query:
         return []
@@ -100,6 +109,11 @@ def retrieve_relevant_chunks(query: str, top_k: int | None = None) -> list[Retri
 
 
 def build_context_block(chunks: list[RetrievedChunk]) -> str:
+    """
+    Converts a list of retrieved chunks into a single string block ready to inject into
+    a prompt. Each chunk is numbered and prefixed with its source path, type, and chunk
+    index. Returns an empty string if the list is empty.
+    """
     if not chunks:
         return ''
 

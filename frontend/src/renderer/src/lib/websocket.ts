@@ -1,5 +1,7 @@
 const CONNECTION_TIMEOUT_MS = 10000
 
+const LOCAL_BACKEND_HOSTS = new Set(['localhost', '127.0.0.1', '::1'])
+
 const CLOSE_CODE_HINTS: Record<number, string> = {
   1000: 'normal closure',
   1001: 'server or client went away',
@@ -58,6 +60,10 @@ function normalizeBackendUrl(rawBackendUrl: string): URL {
 
   if (backendUrl.hostname === '0.0.0.0') {
     backendUrl.hostname = '127.0.0.1'
+  }
+
+  if (!LOCAL_BACKEND_HOSTS.has(backendUrl.hostname.toLowerCase())) {
+    throw new Error(`VITE_BACKEND_URL must be localhost/loopback for offline mode: ${rawBackendUrl}`)
   }
 
   return backendUrl

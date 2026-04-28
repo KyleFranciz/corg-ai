@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 import wave
@@ -19,6 +20,18 @@ class PipelineResult(TypedDict):
     transcript: str
     audio_duration_seconds: float
     timings: dict[str, float]
+
+
+def _offline_mode_enabled() -> bool:
+    return os.getenv('CORG_OFFLINE_MODE', 'true').strip().lower() != 'false'
+
+
+def _set_offline_env_flags() -> None:
+    if not _offline_mode_enabled():
+        return
+
+    os.environ.setdefault('HF_HUB_OFFLINE', '1')
+    os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
 
 
 # model for making text to speech
@@ -47,7 +60,13 @@ def _get_whisper_model() -> Any:
                 "Audio pipeline dependency unavailable: faster-whisper is not installed or failed to load"
             ) from exc
 
-        _whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+        _set_offline_env_flags()
+        _whisper_model = WhisperModel(
+            'base',
+            device='cpu',
+            compute_type='int8',
+            local_files_only=_offline_mode_enabled(),
+        )
     return _whisper_model
 
 

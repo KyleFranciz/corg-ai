@@ -9,6 +9,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_ollama import ChatOllama
 
 from rag.retrieval import RetrievedChunk, build_context_block, retrieve_relevant_chunks
+from services.offline_guard import require_local_service_url
 
 DEFAULT_OLLAMA_HOST = 'http://127.0.0.1:11434'
 DEFAULT_AGENT_MODEL = 'qwen3.5:9b'
@@ -68,7 +69,10 @@ def get_chat_model() -> ChatOllama:
     if _chat_model is not None:
         return _chat_model
 
-    ollama_host = os.getenv('OLLAMA_HOST', DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST
+    ollama_host = require_local_service_url(
+        'OLLAMA_HOST',
+        os.getenv('OLLAMA_HOST', DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST,
+    )
     model_name = os.getenv('CORG_AGENT_MODEL', DEFAULT_AGENT_MODEL).strip() or DEFAULT_AGENT_MODEL
     temperature = _read_float_env('CORG_AGENT_TEMPERATURE', DEFAULT_TEMPERATURE)
     max_tokens = _read_int_env('CORG_AGENT_MAX_TOKENS')
@@ -190,7 +194,10 @@ def generate_agent_response(
     messages = _build_history_messages(message_history, context_block)
     messages.append(HumanMessage(content=clean_user_text))
 
-    ollama_host = os.getenv('OLLAMA_HOST', DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST
+    ollama_host = require_local_service_url(
+        'OLLAMA_HOST',
+        os.getenv('OLLAMA_HOST', DEFAULT_OLLAMA_HOST).strip() or DEFAULT_OLLAMA_HOST,
+    )
     model_name = os.getenv('CORG_AGENT_MODEL', DEFAULT_AGENT_MODEL).strip() or DEFAULT_AGENT_MODEL
 
     logger.info(

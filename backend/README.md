@@ -58,6 +58,7 @@ Environment overrides:
 - `CORG_AGENT_SYSTEM_PROMPT`: Optional system prompt for the LangChain agent.
 - `CORG_RAG_TOP_K`: Number of chunks retrieved from Chroma for each query (default `4`).
 - `CORG_RAG_DEBUG`: When `true`, logs retrieved chunk previews for each query.
+- `CORG_OFFLINE_MODE`: Defaults to `true`. Keeps Whisper/HuggingFace loading in local-files-only mode.
 
 Override precedence:
 
