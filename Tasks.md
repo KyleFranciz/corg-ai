@@ -1,7 +1,7 @@
-# CorgAI — Open Tasks
+# CorgAI — Task Tracker
 
-> Last updated: 2026-04-27  
-> Only open (Todo / In Progress) issues are listed. Completed and cancelled issues are excluded.
+> Last updated: 2026-04-28  
+> Open and completed tasks are listed here for stage tracking. Cancelled issues are excluded.
 >
 > **Offline-first policy:** All unresolved tasks must preserve fully offline operation and on-device data persistence unless a task explicitly states otherwise.
 
@@ -15,11 +15,15 @@
 
 ### [COR-11] Stage 3 — RAG Integration and UI Connection
 - **Priority:** High
-- **Status:** Todo
+- **Status:** Done
 - **Linear:** https://linear.app/faunetwork/issue/COR-11
 
 **Description:**  
 Parent milestone for Stage 3. Encompasses all sub-tasks required to wire the RAG knowledge base into the audio pipeline and expose live agent state to the React frontend. Stage is complete when a user can speak a question, the agent retrieves relevant context from ChromaDB, generates an LLM response, speaks it aloud via Piper, and the UI reflects each pipeline stage in real time. All Stage 3 work must enforce offline-first behavior with local inference and local storage only.
+
+**Completion Note (2026-04-28):**
+- Completed Stage 3 checklist requirements for local RAG pipeline + frontend live status integration.
+- Marked COR-13 and COR-14 done after wiring `useAgent` WebSocket lifecycle and left-sidebar conversation history UI.
 
 ---
 
@@ -75,23 +79,44 @@ Connect the transcribed text output from faster-whisper into the existing RAG pi
 
 ### [COR-13] Build useAgent hook and connect React UI to backend
 - **Priority:** High
-- **Status:** Todo
+- **Status:** Done
 - **Stage:** Stage 3
 - **Linear:** https://linear.app/faunetwork/issue/COR-13
 
 **Description:**  
 Build a `useAgent` React hook that manages WebSocket communication with the FastAPI backend. The hook should handle connection lifecycle (connect, reconnect, disconnect), send and receive pipeline state events, and expose the current agent status (`listening`, `thinking`, `speaking`) to UI components. The hook is the single source of truth for agent state in the frontend — no raw WebSocket calls outside of it. The hook must not require internet connectivity checks and should operate against the local backend only.
 
+**Completion Note (2026-04-28):**
+- Finalized socket lifecycle handling (`onopen`, `onmessage`, `onclose`, `onerror`) with reconnect backoff and clean disconnect behavior.
+- Mapped backend `status`/`result`/`error` events to normalized hook state and exposed shared frontend agent state from `useAgent`.
+- Added in-hook conversation turn accumulation from `result` events for session-local UI history.
+
 ---
 
 ### [COR-14] Add conversation history display to the UI
 - **Priority:** High
-- **Status:** Todo
+- **Status:** Done
 - **Stage:** Stage 3
 - **Linear:** https://linear.app/faunetwork/issue/COR-14
 
 **Description:**  
 Add a conversation history panel to the React UI that displays past interaction turns (user transcription + agent response) in real time as they complete. Pull turn data from the WebSocket events or a dedicated history endpoint backed by the SQLite store added in COR-20. Each turn should be appended to the panel as it finishes. The panel must be scrollable and persist for the duration of the session without requiring a page reload. History data must remain local/on-device and not rely on cloud sync.
+
+**Completion Note (2026-04-28):**
+- Added a dedicated left sidebar conversation history component in the renderer UI.
+- Appended completed turns in real time from WebSocket `result` events, including transcript/response and timing metadata.
+- Implemented scrollable history with auto-scroll to latest turn and responsive stacking on smaller screens.
+
+---
+
+## Stage 3 Completion Checklist
+
+- [x] `COR-12` completed: staged pipeline order and deterministic status events are emitted.
+- [x] `COR-18` completed: local ingestion script populates ChromaDB from on-device documents.
+- [x] `COR-19` completed: live Chroma retrieval wired into generation prompt context.
+- [x] `COR-13` completed: `useAgent` is the frontend WebSocket source of truth with lifecycle/reconnect handling.
+- [x] `COR-14` completed: left sidebar conversation history updates in real time from completed turns.
+- [x] End-to-end local loop validated for Stage 3 scope: STT -> retrieval -> LLM -> TTS with real-time UI state updates.
 
 ---
 
