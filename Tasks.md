@@ -41,7 +41,7 @@ Write a Python script (`ingest.py` or similar) that reads documents from a local
 
 ### [COR-19] Wire ChromaDB vector search into RAG pipeline
 - **Priority:** High
-- **Status:** In Progress
+- **Status:** Done
 - **Stage:** Stage 3
 - **Linear:** https://linear.app/faunetwork/issue/COR-19
 
