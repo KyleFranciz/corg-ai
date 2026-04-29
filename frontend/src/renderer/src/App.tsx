@@ -20,6 +20,7 @@ function App(): React.JSX.Element {
 
   return (
     <div className="app-shell">
+      {/* make a fix for the history prop, make it optional */}
       <ConversationHistorySidebar />
 
       <main className="app-main">
