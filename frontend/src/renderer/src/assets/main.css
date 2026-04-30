@@ -158,6 +158,15 @@
   display: inline-block;
 }
 
+.corg-thinking-spinner {
+  animation-name: corg-spin;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  transform-origin: center;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
 /* ---- Upload button ---- */
 
 .corg-upload-btn {
@@ -237,6 +246,54 @@
   flex-direction: column;
   gap: 18px;
   overflow-y: auto;
+}
+
+.corg-followup-form {
+  position: absolute;
+  left: min(233px, 16vw);
+  right: min(233px, 16vw);
+  bottom: 80px;
+  display: flex;
+  gap: 10px;
+}
+
+.corg-followup-input {
+  flex: 1;
+  height: 44px;
+  border: 1px solid var(--corg-ink-faint);
+  border-radius: 7px;
+  padding: 0 12px;
+  font-family: var(--corg-sans);
+  font-size: 15px;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.corg-followup-submit {
+  height: 44px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--corg-ink);
+  color: var(--corg-white);
+  padding: 0 16px;
+  font-family: var(--corg-sans);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.corg-followup-submit:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.corg-followup-error {
+  position: absolute;
+  left: min(233px, 16vw);
+  right: min(233px, 16vw);
+  bottom: 30px;
+  margin: 0;
+  font-family: var(--corg-sans);
+  font-size: 13px;
+  color: rgba(180, 40, 40, 0.9);
 }
 
 /* ---- Shared text elements ---- */

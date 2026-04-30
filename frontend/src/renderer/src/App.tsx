@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useAgent } from '@renderer/hooks/useAgent'
 import { ConversationHistorySidebar } from '@renderer/components/ConversationHistorySidebar'
+import { MicCapsule, type MicState } from '@renderer/components/MicCapsule'
 import { useUploadDocumentsMutation } from '@renderer/queries/documentsQueries'
 import { toast } from 'sonner'
-
-type MicState = 'idle' | 'listening' | 'thinking'
 
 function PaperBg(): React.JSX.Element {
   return (
@@ -22,65 +21,6 @@ function MenuButton({ onClick }: { onClick: () => void }): React.JSX.Element {
       <span className="corg-menu-btn__bar" />
       <span className="corg-menu-btn__bar" />
       <span className="corg-menu-btn__bar" />
-    </button>
-  )
-}
-
-function Waveform(): React.JSX.Element {
-  const heights = [14, 24, 31, 22, 31, 18, 12]
-  return (
-    <div className="corg-waveform">
-      {heights.map((h, i) => (
-        <span
-          key={i}
-          className="corg-waveform__bar"
-          style={{ height: h, animationDelay: `${i * 80}ms` }}
-        />
-      ))}
-    </div>
-  )
-}
-
-function MicCapsule({
-  state,
-  onClick,
-  disabled
-}: {
-  state: MicState
-  onClick?: () => void
-  disabled?: boolean
-}): React.JSX.Element {
-  return (
-    <button
-      className={`corg-mic corg-mic--${state}`}
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={
-        state === 'idle' ? 'Start listening' : state === 'listening' ? 'Listening…' : 'Processing…'
-      }
-    >
-      {state === 'idle' && (
-        <svg width="14" height="19" viewBox="0 0 14 19" fill="white">
-          <path d="M7 12c-.833 0-1.542-.292-2.125-.875S4 9.833 4 9V3c0-.833.292-1.542.875-2.125S6.167 0 7 0s1.542.292 2.125.875S10 2.167 10 3v6c0 .833-.292 1.542-.875 2.125S7.833 12 7 12zM6 19v-3.075c-1.733-.233-3.167-1.008-4.3-2.325S0 10.75 0 9h2c0 1.383.488 2.563 1.463 3.538S5.617 14 7 14s2.563-.487 3.538-1.462S12 10.383 12 9h2c0 1.75-.567 3.283-1.7 4.6s-2.567 2.092-4.3 2.325V19H6z" />
-        </svg>
-      )}
-      {state === 'listening' && <Waveform />}
-      {state === 'thinking' && (
-        <svg
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-          <line x1="12" y1="22.08" x2="12" y2="12" />
-        </svg>
-      )}
     </button>
   )
 }
@@ -110,7 +50,12 @@ function UploadButton({
   disabled?: boolean
 }): React.JSX.Element {
   return (
-    <button className="corg-upload-btn" aria-label="Upload files" onClick={onClick} disabled={disabled}>
+    <button
+      className="corg-upload-btn"
+      aria-label="Upload files"
+      onClick={onClick}
+      disabled={disabled}
+    >
       <PaperclipIcon />
       <span>{disabled ? 'Uploading…' : 'Add a document'}</span>
     </button>
@@ -174,7 +119,10 @@ function App(): React.JSX.Element {
       return
     }
 
-    if ((connectionState === 'error' || connectionState === 'closed') && hasSeenConnectionRef.current) {
+    if (
+      (connectionState === 'error' || connectionState === 'closed') &&
+      hasSeenConnectionRef.current
+    ) {
       toast.error(wsError || 'Unable to connect to backend')
     }
   }, [connectionState, wsError])
@@ -205,9 +153,13 @@ function App(): React.JSX.Element {
             />
             <UploadButton onClick={handleUploadClick} disabled={uploadMutation.isPending} />
             {uploadMutation.isSuccess ? (
-              <div className="corg-label">Uploaded {uploadMutation.data.summary.processed} file(s)</div>
+              <div className="corg-label">
+                Uploaded {uploadMutation.data.summary.processed} file(s)
+              </div>
             ) : null}
-            {uploadMutation.isError ? <div className="corg-error">{uploadMutation.error.message}</div> : null}
+            {uploadMutation.isError ? (
+              <div className="corg-error">{uploadMutation.error.message}</div>
+            ) : null}
           </div>
         )}
 

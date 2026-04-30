@@ -31,7 +31,7 @@ export type UseAgentResult = {
   wsError: string | null
   reconnectAttempt: number
   connect: () => Promise<void>
-  startPipeline: () => Promise<void>
+  startPipeline: (options?: { conversationId?: number }) => Promise<void>
   disconnect: () => void
 }
 
@@ -61,6 +61,7 @@ function mapStageToAgentStatus(stage: PipelineStage | null): AgentStatus {
   return 'idle'
 }
 
+// function to handle keeping the connection open with the agent on the backend
 export function useAgent(): UseAgentResult {
   const socketRef = useRef<WebSocket | null>(null)
   const connectPromiseRef = useRef<Promise<void> | null>(null)
@@ -123,6 +124,15 @@ export function useAgent(): UseAgentResult {
       socket.onmessage = (event) => {
         const pipelineEvent = parsePipelineEvent(event.data)
         if (!pipelineEvent) {
+          return
+        }
+
+        if (pipelineEvent.type === 'response_chunk') {
+          setResponse((previous) => `${previous ?? ''}${pipelineEvent.content}`)
+          return
+        }
+
+        if (pipelineEvent.type === 'audio_progress') {
           return
         }
 
@@ -273,36 +283,40 @@ export function useAgent(): UseAgentResult {
     connectFnRef.current = connect
   }, [connect])
 
-  const startPipeline = useCallback(async (): Promise<void> => {
-    if (isRunning) {
-      return
-    }
-
-    setPipelineStage(null)
-    setPipelineState(null)
-    setStatusMessage(null)
-    setTranscript(null)
-    setResponse(null)
-    setAudioDuration(null)
-    setWsError(null)
-
-    try {
-      await connect()
-
-      const socket = socketRef.current
-      if (!socket || socket.readyState !== WebSocket.OPEN) {
-        throw new Error('WebSocket is not connected')
+  const startPipeline = useCallback(
+    async (options?: { conversationId?: number }): Promise<void> => {
+      if (isRunning) {
+        return
       }
 
-      setIsRunning(true)
-      socket.send(buildStartPipelineMessage())
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to start WebSocket pipeline'
-      setIsRunning(false)
-      setConnectionState('error')
-      setWsError(message)
-    }
-  }, [connect, isRunning])
+      setPipelineStage(null)
+      setPipelineState(null)
+      setStatusMessage(null)
+      setTranscript(null)
+      setResponse(null)
+      setAudioDuration(null)
+      setWsError(null)
+
+      try {
+        await connect()
+
+        const socket = socketRef.current
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+          throw new Error('WebSocket is not connected')
+        }
+
+        setIsRunning(true)
+        socket.send(buildStartPipelineMessage(options))
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Failed to start WebSocket pipeline'
+        setIsRunning(false)
+        setConnectionState('error')
+        setWsError(message)
+      }
+    },
+    [connect, isRunning]
+  )
 
   const disconnect = useCallback((): void => {
     intentionallyDisconnectedRef.current = true

@@ -15,30 +15,30 @@
 }
 
 :root {
-  --corg-paper:        rgb(251, 250, 242);
-  --corg-paper-2:      rgb(247, 245, 233);
-  --corg-white:        rgb(255, 255, 255);
+  --corg-paper: rgb(251, 250, 242);
+  --corg-paper-2: rgb(247, 245, 233);
+  --corg-white: rgb(255, 255, 255);
 
-  --corg-ink:          rgb(50, 50, 50);
-  --corg-ink-pure:     rgb(0, 0, 0);
-  --corg-ink-soft:     rgba(0, 0, 0, 0.64);
-  --corg-ink-mute:     rgba(0, 0, 0, 0.45);
-  --corg-ink-faint:    rgba(0, 0, 0, 0.25);
+  --corg-ink: rgb(50, 50, 50);
+  --corg-ink-pure: rgb(0, 0, 0);
+  --corg-ink-soft: rgba(0, 0, 0, 0.64);
+  --corg-ink-mute: rgba(0, 0, 0, 0.45);
+  --corg-ink-faint: rgba(0, 0, 0, 0.25);
 
-  --corg-stone-100:    rgb(217, 217, 217);
-  --corg-stone-200:    rgb(201, 200, 191);
-  --corg-stone-300:    rgb(181, 180, 171);
-  --corg-stone-400:    rgb(166, 166, 166);
+  --corg-stone-100: rgb(217, 217, 217);
+  --corg-stone-200: rgb(201, 200, 191);
+  --corg-stone-300: rgb(181, 180, 171);
+  --corg-stone-400: rgb(166, 166, 166);
 
-  --corg-serif:        "Instrument Serif", "Times New Roman", Georgia, serif;
-  --corg-sans:         "Inter", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+  --corg-serif: 'Instrument Serif', 'Times New Roman', Georgia, serif;
+  --corg-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
 
-  --corg-ease:         cubic-bezier(0.2, 0.8, 0.2, 1);
-  --corg-dur-fast:     120ms;
-  --corg-dur:          220ms;
-  --corg-dur-slow:     420ms;
+  --corg-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --corg-dur-fast: 120ms;
+  --corg-dur: 220ms;
+  --corg-dur-slow: 420ms;
 
-  --corg-grid-line:    var(--corg-ink-faint);
+  --corg-grid-line: var(--corg-ink-faint);
 }
 
 body {
@@ -55,6 +55,19 @@ body {
 }
 
 @keyframes corg-wave {
-  from { transform: scaleY(0.45); }
-  to   { transform: scaleY(1); }
+  from {
+    transform: scaleY(0.45);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes corg-spin {
+  from {
+    transform: rotateZ(0deg);
+  }
+  to {
+    transform: rotateZ(360deg);
+  }
 }

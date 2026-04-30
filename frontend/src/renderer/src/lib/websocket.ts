@@ -26,6 +26,8 @@ export type PipelineStatusState = 'connected' | 'started' | 'completed' | 'faile
 
 export type PipelineEvent =
   | { type: 'ack'; session_id: number; action: 'start_pipeline' }
+  | { type: 'response_chunk'; session_id: number; content: string; chunk_index: number }
+  | { type: 'audio_progress'; session_id: number; spoken_segments: number }
   | {
       type: 'status'
       session_id: number
@@ -110,6 +112,31 @@ export function parsePipelineEvent(rawData: string): PipelineEvent | null {
       }
     }
 
+    if (event.type === 'response_chunk') {
+      if (typeof event.content !== 'string' || !isNumber(event.chunk_index)) {
+        return null
+      }
+
+      return {
+        type: 'response_chunk',
+        session_id: event.session_id,
+        content: event.content,
+        chunk_index: event.chunk_index
+      }
+    }
+
+    if (event.type === 'audio_progress') {
+      if (!isNumber(event.spoken_segments)) {
+        return null
+      }
+
+      return {
+        type: 'audio_progress',
+        session_id: event.session_id,
+        spoken_segments: event.spoken_segments
+      }
+    }
+
     if (event.type === 'status') {
       if (
         !isPipelineStage(event.stage) ||
@@ -176,7 +203,15 @@ export function parsePipelineEvent(rawData: string): PipelineEvent | null {
   }
 }
 
-export function buildStartPipelineMessage(): string {
+export type StartPipelinePayload = {
+  conversationId?: number
+}
+
+export function buildStartPipelineMessage(payload?: StartPipelinePayload): string {
+  if (payload?.conversationId && payload.conversationId > 0) {
+    return JSON.stringify({ action: 'start_pipeline', conversation_id: payload.conversationId })
+  }
+
   return JSON.stringify({ action: 'start_pipeline' })
 }
 

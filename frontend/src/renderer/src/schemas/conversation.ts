@@ -23,3 +23,10 @@ export type ConversationsResponse = {
 export type ConversationResponse = {
   conversation: ConversationSession
 }
+
+export type FollowUpQuestionResponse = {
+  session_id: number
+  question: string
+  response: string
+  retrieved_context_count: number
+}

@@ -1,6 +1,15 @@
-import { useQuery } from '@tanstack/react-query'
-import { getConversationById, getConversations } from '@renderer/api/conversationsApi'
-import type { ConversationSession } from '@renderer/schemas/conversation'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult
+} from '@tanstack/react-query'
+import {
+  askFollowUpQuestion,
+  getConversationById,
+  getConversations
+} from '@renderer/api/conversationsApi'
+import type { ConversationSession, FollowUpQuestionResponse } from '@renderer/schemas/conversation'
 
 export const conversationsKeys = {
   all: ['conversations'] as const,
@@ -45,4 +54,18 @@ export function useConversationByIdQuery(conversationId: number | null): {
     isLoading: query.isLoading,
     error: query.error
   }
+}
+
+export function useAskFollowUpQuestionMutation(
+  conversationId: number
+): UseMutationResult<FollowUpQuestionResponse, Error, string> {
+  const queryClient = useQueryClient()
+
+  return useMutation<FollowUpQuestionResponse, Error, string>({
+    mutationFn: (question: string) => askFollowUpQuestion(conversationId, question),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: conversationsKeys.detail(conversationId) })
+      await queryClient.invalidateQueries({ queryKey: conversationsKeys.lists() })
+    }
+  })
 }

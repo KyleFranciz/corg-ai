@@ -1,4 +1,5 @@
 import { Link, useParams } from '@tanstack/react-router'
+import { SessionTranscription } from '@renderer/components/SessionTranscription'
 import { useConversationByIdQuery } from '@renderer/queries/conversationsQueries'
 
 export function ConversationRoute(): React.JSX.Element {
@@ -29,39 +30,27 @@ export function ConversationRoute(): React.JSX.Element {
         </svg>
       </Link>
 
-      <div className="corg-response-content">
-        {isLoading ? (
+      {isLoading ? (
+        <div className="corg-response-content">
           <p className="corg-state-label">Loading…</p>
-        ) : null}
+        </div>
+      ) : null}
 
-        {invalidConversationId ? (
+      {invalidConversationId ? (
+        <div className="corg-response-content">
           <p className="corg-state-label">Invalid conversation id.</p>
-        ) : null}
+        </div>
+      ) : null}
 
-        {error ? (
+      {error ? (
+        <div className="corg-response-content">
           <p className="corg-state-label">{error.message}</p>
-        ) : null}
+        </div>
+      ) : null}
 
-        {!invalidConversationId && !isLoading && !error && conversation
-          ? conversation.messages.map((message) => (
-              message.role === 'user' ? (
-                <div
-                  key={message.id ?? `${message.role}-${message.created_at}`}
-                  className="corg-user-transcript"
-                >
-                  {message.content}
-                </div>
-              ) : (
-                <div
-                  key={message.id ?? `${message.role}-${message.created_at}`}
-                  className="corg-bubble"
-                >
-                  {message.content}
-                </div>
-              )
-            ))
-          : null}
-      </div>
+      {!invalidConversationId && !isLoading && !error && conversation ? (
+        <SessionTranscription conversationId={validConversationId} conversation={conversation} />
+      ) : null}
     </div>
   )
 }
