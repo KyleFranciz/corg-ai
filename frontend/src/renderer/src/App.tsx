@@ -202,7 +202,9 @@ function App(): React.JSX.Element {
         {screen === 'listening' && (
           <>
             <div className="corg-listening-content">
-              {transcript ? <div className="corg-user-transcript">{transcript}</div> : null}
+              <div className={transcript ? 'corg-user-transcript' : 'corg-user-transcript-placeholder'}>
+                {transcript ?? 'Your question will appear here once captured'}
+              </div>
               <div className="corg-label">Listening</div>
             </div>
             <div className="corg-mic-footer">

@@ -221,6 +221,7 @@ async def _run_audio_pipeline(
             details={
                 'duration_seconds': stage_timings['transcribing_seconds'],
                 'transcript_chars': len(transcript),
+                'transcript': transcript,
             },
         )
 

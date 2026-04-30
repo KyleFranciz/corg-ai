@@ -145,6 +145,15 @@ export function useAgent(): UseAgentResult {
           setPipelineState(pipelineEvent.state)
           setStatusMessage(pipelineEvent.message)
 
+          if (
+            pipelineEvent.stage === 'transcribing' &&
+            pipelineEvent.state === 'completed' &&
+            typeof pipelineEvent.details.transcript === 'string' &&
+            pipelineEvent.details.transcript.trim().length > 0
+          ) {
+            setTranscript(pipelineEvent.details.transcript)
+          }
+
           if (pipelineEvent.state === 'failed') {
             setIsRunning(false)
           }
