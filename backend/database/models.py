@@ -40,10 +40,13 @@ class Messages(SQLModel, table=True):
 # User Uploaded docs
 class Documents(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: Optional[int] = Field(default=None, foreign_key="session.id")
     filename: str
     file_path: str  # file on disk location
     file_type: str
     ingested_at: datetime
+    page_count: Optional[int] = None
+    file_size_bytes: int = 0
     chunk_count: int  # chunks the Document was split into for chroma
     status: DocumentStatus  # [pending, ingesting, failed]
 

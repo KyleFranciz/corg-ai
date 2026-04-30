@@ -1,4 +1,5 @@
 import os
+import sqlite3
 import tempfile
 from pathlib import Path
 
@@ -56,3 +57,23 @@ engine = create_engine(
 def create_database() -> None:
     # adds the tables I made to the database
     SQLModel.metadata.create_all(engine)
+    _migrate_documents_table()
+
+
+def _migrate_documents_table() -> None:
+    with sqlite3.connect(DB_PATH) as connection:
+        cursor = connection.execute('PRAGMA table_info(documents)')
+        existing_columns = {row[1] for row in cursor.fetchall()}
+
+        if 'session_id' not in existing_columns:
+            connection.execute('ALTER TABLE documents ADD COLUMN session_id INTEGER')
+
+        if 'page_count' not in existing_columns:
+            connection.execute('ALTER TABLE documents ADD COLUMN page_count INTEGER')
+
+        if 'file_size_bytes' not in existing_columns:
+            connection.execute(
+                'ALTER TABLE documents ADD COLUMN file_size_bytes INTEGER NOT NULL DEFAULT 0'
+            )
+
+        connection.commit()

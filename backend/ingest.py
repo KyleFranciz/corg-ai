@@ -5,6 +5,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from pypdf import PdfReader
 from sqlmodel import Session as DbSession
@@ -54,6 +55,14 @@ def _read_pdf_file(path: Path) -> str:
     return "\n\n".join(pages)
 
 
+def _resolve_page_count(path: Path) -> int | None:
+    if path.suffix.lower() != ".pdf":
+        return None
+
+    reader = PdfReader(str(path))
+    return len(reader.pages)
+
+
 def _load_document_text(path: Path) -> str:
     suffix = path.suffix.lower()
     if suffix in {".txt", ".md"}:
@@ -96,7 +105,14 @@ def _chunk_id(source_path: str, source_type: str, chunk_idx: int) -> str:
     return f"{source_type}_{digest[:24]}"
 
 
-def _ensure_document_row(db: DbSession, path: Path, source_type: str) -> Documents:
+def _ensure_document_row(
+    db: DbSession,
+    path: Path,
+    source_type: str,
+    session_id: Optional[int],
+    page_count: int | None,
+    file_size_bytes: int,
+) -> Documents:
     path_string = str(path.resolve())
     existing = db.exec(
         select(Documents).where(Documents.file_path == path_string)
@@ -105,18 +121,24 @@ def _ensure_document_row(db: DbSession, path: Path, source_type: str) -> Documen
 
     if existing is None:
         existing = Documents(
+            session_id=session_id,
             filename=path.name,
             file_path=path_string,
             file_type=source_type,
             ingested_at=now,
+            page_count=page_count,
+            file_size_bytes=file_size_bytes,
             chunk_count=0,
             status=DocumentStatus.ingesting,
         )
         db.add(existing)
     else:
+        existing.session_id = session_id
         existing.filename = path.name
         existing.file_type = source_type
         existing.ingested_at = now
+        existing.page_count = page_count
+        existing.file_size_bytes = file_size_bytes
         existing.status = DocumentStatus.ingesting
 
     db.commit()
@@ -171,11 +193,21 @@ def _upsert_document(
     documents_root: Path,
     chunk_size: int,
     chunk_overlap: int,
+    session_id: Optional[int],
     summary: IngestionSummary,
 ) -> None:
     source_type = _resolve_source_type(path)
     collection = get_chunks_collection(source_type)
-    document_row = _ensure_document_row(db, path, source_type)
+    page_count = _resolve_page_count(path)
+    file_size_bytes = path.stat().st_size
+    document_row = _ensure_document_row(
+        db,
+        path,
+        source_type,
+        session_id=session_id,
+        page_count=page_count,
+        file_size_bytes=file_size_bytes,
+    )
 
     source_path = str(path.relative_to(documents_root))
     text = _load_document_text(path)
@@ -267,6 +299,8 @@ def _upsert_document(
     document_row.chunk_count = len(chunks)
     document_row.status = DocumentStatus.pending
     document_row.ingested_at = datetime.now(timezone.utc)
+    document_row.page_count = page_count
+    document_row.file_size_bytes = file_size_bytes
     db.add(document_row)
     db.commit()
 
@@ -275,6 +309,7 @@ def run_ingestion(
     documents_dir: Path = DEFAULT_DOCUMENTS_DIR,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
+    session_id: Optional[int] = None,
 ) -> IngestionSummary:
     if chunk_size <= 0:
         raise ValueError("chunk_size must be greater than zero")
@@ -311,6 +346,7 @@ def run_ingestion(
                     documents_root=documents_dir,
                     chunk_size=chunk_size,
                     chunk_overlap=chunk_overlap,
+                    session_id=session_id,
                     summary=summary,
                 )
                 print(f"Ingested: {path.relative_to(documents_dir)}")
