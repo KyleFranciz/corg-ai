@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import time
+from collections.abc import Iterator
 from typing import Any, Sequence, TypedDict
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -154,6 +155,28 @@ def _normalize_response_content(content: Any) -> str:
     return str(content).strip()
 
 
+def _normalize_stream_chunk_content(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, str):
+                text = item
+            elif isinstance(item, dict):
+                text = str(item.get("text", ""))
+            else:
+                text = str(item)
+
+            if text:
+                parts.append(text)
+
+        return "".join(parts)
+
+    return str(content)
+
+
 def retrieve_context(user_text: str) -> list[RetrievedChunk]:
     clean_user_text = user_text.strip()
     if not clean_user_text:
@@ -184,17 +207,16 @@ def retrieve_context(user_text: str) -> list[RetrievedChunk]:
     return chunks
 
 
-def generate_agent_response(
+def _build_agent_messages(
     user_text: str,
     history_messages: Sequence[AgentHistoryMessage] | None = None,
     retrieved_chunks: Sequence[RetrievedChunk] | None = None,
-) -> str:
-    started_at = time.perf_counter()
+) -> tuple[list[BaseMessage], str, str, str, list[AgentHistoryMessage]]:
     clean_user_text = user_text.strip()
     if not clean_user_text:
         raise RuntimeError("Cannot generate an agent response from empty user text")
 
-    message_history = history_messages or []
+    message_history = list(history_messages or [])
     context_block = build_context_block(list(retrieved_chunks or []))
     messages = _build_history_messages(message_history, context_block)
     messages.append(HumanMessage(content=clean_user_text))
@@ -206,6 +228,59 @@ def generate_agent_response(
     model_name = (
         os.getenv("CORG_AGENT_MODEL", DEFAULT_AGENT_MODEL).strip()
         or DEFAULT_AGENT_MODEL
+    )
+
+    return messages, clean_user_text, ollama_host, model_name, message_history
+
+
+def stream_agent_response_chunks(
+    user_text: str,
+    history_messages: Sequence[AgentHistoryMessage] | None = None,
+    retrieved_chunks: Sequence[RetrievedChunk] | None = None,
+) -> Iterator[str]:
+    messages, clean_user_text, ollama_host, model_name, message_history = _build_agent_messages(
+        user_text,
+        history_messages,
+        retrieved_chunks,
+    )
+
+    logger.info(
+        "Agent streaming started model=%s host=%s history_messages=%s user_chars=%s retrieved_chunks=%s",
+        model_name,
+        ollama_host,
+        len(message_history),
+        len(clean_user_text),
+        len(retrieved_chunks or []),
+    )
+
+    llm = get_chat_model()
+    try:
+        for chunk in llm.stream(messages):
+            chunk_text = _normalize_stream_chunk_content(getattr(chunk, "content", chunk))
+            if chunk_text:
+                yield chunk_text
+    except Exception as exc:
+        logger.exception(
+            "Agent streaming failed model=%s host=%s history_messages=%s",
+            model_name,
+            ollama_host,
+            len(message_history),
+        )
+        raise RuntimeError(
+            "Agent generation failed. Ensure Ollama is running and the model is available locally."
+        ) from exc
+
+
+def generate_agent_response(
+    user_text: str,
+    history_messages: Sequence[AgentHistoryMessage] | None = None,
+    retrieved_chunks: Sequence[RetrievedChunk] | None = None,
+) -> str:
+    started_at = time.perf_counter()
+    messages, clean_user_text, ollama_host, model_name, message_history = _build_agent_messages(
+        user_text,
+        history_messages,
+        retrieved_chunks,
     )
 
     logger.info(

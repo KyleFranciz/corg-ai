@@ -3,11 +3,13 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel
 from sqlmodel import func, select
 from sqlmodel import Session as DbSession
 
 from database.database_engine import engine
-from database.models import Messages, Session
+from database.models import MessageRole, Messages, Session
+from services.agent import generate_agent_response, retrieve_context
 
 router = APIRouter(tags=['conversation'])
 
@@ -50,6 +52,29 @@ def _build_conversation(session_row: Session, messages: list[Messages]) -> dict[
 def _fetch_session_messages(db: DbSession, session_id: int) -> list[Messages]:
     statement = select(Messages).where(Messages.session_id == session_id)
     return list(db.exec(statement))
+
+
+def _to_agent_history(messages: list[Messages]) -> list[dict[str, str]]:
+    history: list[dict[str, str]] = []
+    for message in sorted(messages, key=lambda msg: msg.created_at):
+        text = message.content.strip()
+        if not text:
+            continue
+
+        history.append({'role': message.role.value, 'content': text})
+
+    return history
+
+
+class FollowUpQuestionRequest(BaseModel):
+    question: str
+
+
+class FollowUpQuestionResponse(BaseModel):
+    session_id: int
+    question: str
+    response: str
+    retrieved_context_count: int
 
 
 @router.get('/conversation')
@@ -134,3 +159,47 @@ def get_conversation(conversation_id: int) -> dict[str, Any]:
         return {
             'conversation': conversation,
         }
+
+
+@router.post('/conversation/{conversation_id}/ask')
+def ask_follow_up_question(
+    conversation_id: int,
+    payload: FollowUpQuestionRequest,
+) -> FollowUpQuestionResponse:
+    clean_question = payload.question.strip()
+    if not clean_question:
+        raise HTTPException(status_code=400, detail='Question cannot be empty')
+
+    with DbSession(engine) as db:
+        session_row = db.get(Session, conversation_id)
+        if session_row is None:
+            raise HTTPException(status_code=404, detail='Conversation not found')
+
+        existing_messages = _fetch_session_messages(db, conversation_id)
+        history = _to_agent_history(existing_messages)
+        retrieved_chunks = retrieve_context(clean_question)
+        response_text = generate_agent_response(clean_question, history, retrieved_chunks)
+
+        user_message = Messages(
+            session_id=conversation_id,
+            role=MessageRole.user,
+            content=clean_question,
+            audio_path=None,
+        )
+        agent_message = Messages(
+            session_id=conversation_id,
+            role=MessageRole.agent,
+            content=response_text,
+            audio_path=None,
+        )
+
+        db.add(user_message)
+        db.add(agent_message)
+        db.commit()
+
+        return FollowUpQuestionResponse(
+            session_id=conversation_id,
+            question=clean_question,
+            response=response_text,
+            retrieved_context_count=len(retrieved_chunks),
+        )
