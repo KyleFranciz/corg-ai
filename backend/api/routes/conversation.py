@@ -11,12 +11,14 @@ from database.database_engine import engine
 from database.models import MessageRole, Messages, Session
 from services.agent import generate_agent_response, retrieve_context
 
-router = APIRouter(tags=['conversation'])
+router = APIRouter(tags=["conversation"])
 
 logger = logging.getLogger(__name__)
 
 
-def _build_conversation(session_row: Session, messages: list[Messages]) -> dict[str, Any]:
+def _build_conversation(
+    session_row: Session, messages: list[Messages]
+) -> dict[str, Any]:
     started_at = session_row.started_at
     ended_at = session_row.ended_at
     summary = session_row.summary
@@ -30,22 +32,24 @@ def _build_conversation(session_row: Session, messages: list[Messages]) -> dict[
 
     messages_payload = []
     for msg in message_rows:
-        messages_payload.append({
-            'id': msg.id,
-            'role': msg.role.value,
-            'content': msg.content,
-            'created_at': msg.created_at.isoformat() if msg.created_at else None,
-            'audio_path': msg.audio_path,
-        })
+        messages_payload.append(
+            {
+                "id": msg.id,
+                "role": msg.role.value,
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "audio_path": msg.audio_path,
+            }
+        )
 
     return {
-        'session_id': session_row.id,
-        'started_at': started_at.isoformat() if started_at else None,
-        'ended_at': ended_at.isoformat() if ended_at else None,
-        'summary': summary,
-        'last_message_at': last_message_at.isoformat() if last_message_at else None,
-        'message_count': message_count,
-        'messages': messages_payload,
+        "session_id": session_row.id,
+        "started_at": started_at.isoformat() if started_at else None,
+        "ended_at": ended_at.isoformat() if ended_at else None,
+        "summary": summary,
+        "last_message_at": last_message_at.isoformat() if last_message_at else None,
+        "message_count": message_count,
+        "messages": messages_payload,
     }
 
 
@@ -61,7 +65,7 @@ def _to_agent_history(messages: list[Messages]) -> list[dict[str, str]]:
         if not text:
             continue
 
-        history.append({'role': message.role.value, 'content': text})
+        history.append({"role": message.role.value, "content": text})
 
     return history
 
@@ -77,16 +81,22 @@ class FollowUpQuestionResponse(BaseModel):
     retrieved_context_count: int
 
 
-@router.get('/conversation')
+@router.get("/conversation")
 def list_conversations(
-    limit: int = Query(50, ge=1, le=200, description='Maximum number of sessions to return'),
-    include_messages: bool = Query(True, description='Whether to include nested messages per session'),
+    limit: int = Query(
+        50, ge=1, le=200, description="Maximum number of sessions to return"
+    ),
+    include_messages: bool = Query(
+        True, description="Whether to include nested messages per session"
+    ),
 ) -> dict[str, Any]:
+
+    # access the database and get the conversations in order from the latest -> oldest
     with DbSession(engine) as db:
         latest_ts_subq = (
             select(
                 Messages.session_id,
-                func.max(Messages.created_at).label('last_message_at'),
+                func.max(Messages.created_at).label("last_message_at"),
             )
             .group_by(Messages.session_id)
             .subquery()
@@ -113,18 +123,28 @@ def list_conversations(
                 if session_row.started_at:
                     last_at = session_row.started_at
 
-                conversations.append({
-                    'session_id': session_row.id,
-                    'started_at': session_row.started_at.isoformat() if session_row.started_at else None,
-                    'ended_at': session_row.ended_at.isoformat() if session_row.ended_at else None,
-                    'summary': session_row.summary,
-                    'last_message_at': last_at.isoformat() if last_at else None,
-                    'message_count': 0,
-                    'messages': [],
-                })
+                conversations.append(
+                    {
+                        "session_id": session_row.id,
+                        "started_at": session_row.started_at.isoformat()
+                        if session_row.started_at
+                        else None,
+                        "ended_at": session_row.ended_at.isoformat()
+                        if session_row.ended_at
+                        else None,
+                        "summary": session_row.summary,
+                        "last_message_at": last_at.isoformat() if last_at else None,
+                        "message_count": 0,
+                        "messages": [],
+                    }
+                )
         else:
+            # get an array of session ids
             session_ids = [s.id for s in session_rows]
-            messages_statement = select(Messages).where(Messages.session_id.in_(session_ids))
+            # get messages where the session id is connected with the message
+            messages_statement = select(Messages).where(
+                Messages.session_id.in_(session_ids)
+            )
             all_messages = list(db.exec(messages_statement))
 
             messages_by_session: dict[int, list[Messages]] = {}
@@ -136,50 +156,57 @@ def list_conversations(
                 conversations.append(_build_conversation(session_row, msgs))
 
         logger.info(
-            'Listed conversations sessions=%s include_messages=%s',
+            "Listed conversations sessions=%s include_messages=%s",
             len(conversations),
             include_messages,
         )
 
         return {
-            'conversations': conversations,
+            "conversations": conversations,
         }
 
 
-@router.get('/conversation/{conversation_id}')
+# get specific conversations data
+@router.get("/conversation/{conversation_id}")
 def get_conversation(conversation_id: int) -> dict[str, Any]:
     with DbSession(engine) as db:
         session_row = db.get(Session, conversation_id)
         if session_row is None:
-            raise HTTPException(status_code=404, detail='Conversation not found')
+            raise HTTPException(status_code=404, detail="Conversation not found")
 
         messages = _fetch_session_messages(db, conversation_id)
         conversation = _build_conversation(session_row, messages)
 
         return {
-            'conversation': conversation,
+            "conversation": conversation,
         }
 
 
-@router.post('/conversation/{conversation_id}/ask')
+# for follow up questions about the document added
+@router.post("/conversation/{conversation_id}/ask")
 def ask_follow_up_question(
     conversation_id: int,
     payload: FollowUpQuestionRequest,
 ) -> FollowUpQuestionResponse:
+
+    # format the question
     clean_question = payload.question.strip()
     if not clean_question:
-        raise HTTPException(status_code=400, detail='Question cannot be empty')
+        raise HTTPException(status_code=400, detail="Question cannot be empty")
 
     with DbSession(engine) as db:
         session_row = db.get(Session, conversation_id)
         if session_row is None:
-            raise HTTPException(status_code=404, detail='Conversation not found')
+            raise HTTPException(status_code=404, detail="Conversation not found")
 
         existing_messages = _fetch_session_messages(db, conversation_id)
         history = _to_agent_history(existing_messages)
         retrieved_chunks = retrieve_context(clean_question)
-        response_text = generate_agent_response(clean_question, history, retrieved_chunks)
+        response_text = generate_agent_response(
+            clean_question, history, retrieved_chunks
+        )
 
+        # format the different role messages
         user_message = Messages(
             session_id=conversation_id,
             role=MessageRole.user,
