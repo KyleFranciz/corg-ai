@@ -138,6 +138,15 @@ Operational guidance for coding agents working in this repository.
 - Keep preload bridge APIs minimal and explicit.
 - Validate/sanitize data crossing IPC boundaries.
 
+### Frontend Data Fetching Policy (React Query)
+- Use React Query (`@tanstack/react-query`) for frontend HTTP data fetching and caching.
+- Do not implement page/component-level HTTP fetching with ad-hoc `useEffect` + `useState` loading/error state when React Query is appropriate.
+- Keep API calls in dedicated data-domain files under `src/renderer/src/api/` (axios-based functions only).
+- Keep React Query keys and hooks in dedicated files under `src/renderer/src/queries/`, named by data domain.
+- Name files by data type/resource being fetched (e.g., `conversationsApi.ts`, `conversationsQueries.ts`).
+- Components/routes should consume query hooks and focus on rendering/UI state.
+- Preserve existing offline-first constraints by using the local `apiClient` (`VITE_BACKEND_URL` loopback policy).
+
 ## Imports and Modules
 - Group imports by built-in, third-party, and local.
 - Keep import order stable and readable.
