@@ -7,12 +7,14 @@ import {
 import {
   askFollowUpQuestion,
   createConversationSession,
+  deleteConversationSession,
   getConversationById,
   getConversations
 } from '@renderer/api/conversationsApi'
 import type {
   ConversationSession,
   CreateSessionResponse,
+  DeleteConversationResponse,
   FollowUpQuestionResponse
 } from '@renderer/schemas/conversation'
 
@@ -82,5 +84,29 @@ export function useCreateConversationSessionMutation(): UseMutationResult<
 > {
   return useMutation<CreateSessionResponse, Error, void>({
     mutationFn: createConversationSession
+  })
+}
+
+export function useDeleteConversationSessionMutation(): UseMutationResult<
+  DeleteConversationResponse,
+  Error,
+  number
+> {
+  const queryClient = useQueryClient()
+
+  return useMutation<DeleteConversationResponse, Error, number>({
+    mutationFn: (conversationId: number) => deleteConversationSession(conversationId),
+    onSuccess: async (_result, deletedId) => {
+      queryClient.setQueriesData<ConversationSession[]>({ queryKey: conversationsKeys.lists() }, (previous) => {
+        if (!previous) {
+          return previous
+        }
+
+        return previous.filter((conversation) => conversation.session_id !== deletedId)
+      })
+
+      await queryClient.invalidateQueries({ queryKey: conversationsKeys.lists() })
+      await queryClient.removeQueries({ queryKey: conversationsKeys.detail(deletedId) })
+    }
   })
 }

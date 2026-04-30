@@ -4,6 +4,7 @@ import type {
   ConversationResponse,
   ConversationsResponse,
   ConversationSession,
+  DeleteConversationResponse,
   FollowUpQuestionResponse
 } from '@renderer/schemas/conversation'
 
@@ -26,6 +27,15 @@ export async function getConversations(limit = 50): Promise<ConversationSession[
 export async function getConversationById(conversationId: number): Promise<ConversationSession> {
   const response = await apiClient.get<ConversationResponse>(`/conversation/${conversationId}`)
   return response.data.conversation
+}
+
+export async function deleteConversationSession(
+  conversationId: number
+): Promise<DeleteConversationResponse> {
+  const response = await apiClient.delete<DeleteConversationResponse>(
+    `/conversation/${conversationId}`
+  )
+  return response.data
 }
 
 export async function askFollowUpQuestion(

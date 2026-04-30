@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -7,13 +8,15 @@ from pydantic import BaseModel
 from sqlmodel import func, select
 from sqlmodel import Session as DbSession
 
-from database.database_engine import engine
-from database.models import Documents, MessageRole, Messages, Session
+from database.chroma_client import get_chunks_collection
+from database.database_engine import DATA_DIR, engine
+from database.models import Chunks, Documents, MessageRole, Messages, Session
 from services.agent import generate_agent_response, retrieve_context
 
 router = APIRouter(tags=["conversation"])
 
 logger = logging.getLogger(__name__)
+UPLOADS_DIR = DATA_DIR / 'uploads'
 
 
 def _build_conversation(
@@ -87,6 +90,22 @@ class FollowUpQuestionResponse(BaseModel):
 class CreateSessionResponse(BaseModel):
     session_id: int
     started_at: str | None
+
+
+class DeleteConversationResponse(BaseModel):
+    session_id: int
+    messages_deleted: int
+    documents_deleted: int
+    chunks_deleted: int
+    chroma_chunks_deleted: int
+
+
+def _resolve_source_path(file_path: str) -> str:
+    path_obj = Path(file_path)
+    try:
+        return str(path_obj.relative_to(UPLOADS_DIR))
+    except ValueError:
+        return path_obj.name
 
 
 @router.post("/conversation/session")
@@ -278,4 +297,52 @@ def ask_follow_up_question(
             question=clean_question,
             response=response_text,
             retrieved_context_count=len(retrieved_chunks),
+        )
+
+
+@router.delete('/conversation/{conversation_id}')
+def delete_conversation(conversation_id: int) -> DeleteConversationResponse:
+    with DbSession(engine) as db:
+        session_row = db.get(Session, conversation_id)
+        if session_row is None:
+            raise HTTPException(status_code=404, detail='Conversation not found')
+
+        messages = list(db.exec(select(Messages).where(Messages.session_id == conversation_id)))
+        documents = list(db.exec(select(Documents).where(Documents.session_id == conversation_id)))
+
+        chunks_deleted = 0
+        chroma_chunks_deleted = 0
+
+        for document in documents:
+            chunk_rows = list(db.exec(select(Chunks).where(Chunks.document_id == document.id)))
+            chunks_deleted += len(chunk_rows)
+            for chunk_row in chunk_rows:
+                db.delete(chunk_row)
+
+            collection = get_chunks_collection(document.file_type)
+            source_path = _resolve_source_path(document.file_path)
+            existing = collection.get(where={'source_path': source_path}, include=['metadatas'])
+            chunk_ids = existing.get('ids', []) if existing else []
+            chroma_chunks_deleted += len(chunk_ids)
+            if chunk_ids:
+                collection.delete(ids=chunk_ids)
+
+            file_path = Path(document.file_path)
+            if file_path.exists():
+                file_path.unlink()
+
+            db.delete(document)
+
+        for message in messages:
+            db.delete(message)
+
+        db.delete(session_row)
+        db.commit()
+
+        return DeleteConversationResponse(
+            session_id=conversation_id,
+            messages_deleted=len(messages),
+            documents_deleted=len(documents),
+            chunks_deleted=chunks_deleted,
+            chroma_chunks_deleted=chroma_chunks_deleted,
         )

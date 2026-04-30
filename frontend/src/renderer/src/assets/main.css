@@ -411,6 +411,12 @@
   margin: 0;
 }
 
+.history-turn-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .history-turn {
   display: flex;
   align-items: center;
@@ -463,6 +469,29 @@
 
 .history-turn__messages {
   display: none;
+}
+
+.history-turn__delete {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--corg-ink-mute);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.history-turn__delete:hover {
+  color: rgba(180, 40, 40, 0.9);
+}
+
+.history-turn__delete:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 /* ============================================================
@@ -525,6 +554,27 @@
 
 .corg-docs-btn:hover {
   opacity: 0.85;
+}
+
+.corg-session-delete-btn {
+  position: absolute;
+  bottom: 80px;
+  right: 178px;
+  height: 44px;
+  border: 1px solid rgba(180, 40, 40, 0.25);
+  border-radius: 7px;
+  background: rgba(180, 40, 40, 0.08);
+  color: rgba(140, 20, 20, 0.92);
+  padding: 0 16px;
+  font-family: var(--corg-sans);
+  font-size: 14px;
+  cursor: pointer;
+  z-index: 20;
+}
+
+.corg-session-delete-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
 }
 
 /* ============================================================

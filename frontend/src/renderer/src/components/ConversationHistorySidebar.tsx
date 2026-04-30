@@ -1,5 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
+import { FiX } from 'react-icons/fi'
+import { useDeleteConversationSessionMutation } from '@renderer/queries/conversationsQueries'
+import { toast } from 'sonner'
 import type { ConversationSession } from '@renderer/schemas/conversation'
 import { useConversationsQuery } from '@renderer/queries/conversationsQueries'
 
@@ -33,7 +36,23 @@ export function ConversationHistorySidebar({
   const listRef = useRef<HTMLDivElement | null>(null)
   // data fetching functions (amount of conversations shown in the sidebar is adjustable)
   const { data: conversationsData, isLoading, error } = useConversationsQuery(50)
+  const deleteSessionMutation = useDeleteConversationSessionMutation()
   const conversations: ConversationSession[] = conversationsData ?? EMPTY_CONVERSATIONS
+
+  const handleDeleteSession = async (sessionId: number): Promise<void> => {
+    const accepted = window.confirm('Delete this session and all attached messages/documents?')
+    if (!accepted) {
+      return
+    }
+
+    try {
+      await deleteSessionMutation.mutateAsync(sessionId)
+      toast.success('Session deleted')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete session'
+      toast.error(message)
+    }
+  }
 
   // function to handle scrolling to the top of the list of convos
   useEffect(() => {
@@ -63,24 +82,35 @@ export function ConversationHistorySidebar({
           conversations
             .filter((conversation) => conversation.session_id !== null)
             .map((conversation) => (
-              <Link
-                className="history-turn"
-                activeProps={{ className: 'history-turn history-turn--active' }}
-                key={conversation.session_id}
-                params={{ conversationId: String(conversation.session_id) }}
-                to="/conversation/$conversationId"
-              >
-                <div className="history-turn__title-row">
-                  {isDocumentsOnlySession(conversation) ? (
-                    <span
-                      aria-label="Session has documents"
-                      className="history-turn__doc-dot"
-                      title="Session has documents"
-                    />
-                  ) : null}
-                  <h3 className="history-turn__title">{buildSessionTitle(conversation.messages)}</h3>
-                </div>
-              </Link>
+              <div className="history-turn-wrap" key={conversation.session_id}>
+                <Link
+                  className="history-turn"
+                  activeProps={{ className: 'history-turn history-turn--active' }}
+                  params={{ conversationId: String(conversation.session_id) }}
+                  to="/conversation/$conversationId"
+                >
+                  <div className="history-turn__title-row">
+                    {isDocumentsOnlySession(conversation) ? (
+                      <span
+                        aria-label="Session has documents"
+                        className="history-turn__doc-dot"
+                        title="Session has documents"
+                      />
+                    ) : null}
+                    <h3 className="history-turn__title">{buildSessionTitle(conversation.messages)}</h3>
+                  </div>
+                </Link>
+                <button
+                  aria-label="Delete session"
+                  className="history-turn__delete"
+                  disabled={deleteSessionMutation.isPending}
+                  onClick={() => void handleDeleteSession(conversation.session_id as number)}
+                  title="Delete session"
+                  type="button"
+                >
+                  <FiX size={14} />
+                </button>
+              </div>
             ))
         )}
       </div>

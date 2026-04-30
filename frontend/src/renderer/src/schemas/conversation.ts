@@ -36,3 +36,11 @@ export type FollowUpQuestionResponse = {
   response: string
   retrieved_context_count: number
 }
+
+export type DeleteConversationResponse = {
+  session_id: number
+  messages_deleted: number
+  documents_deleted: number
+  chunks_deleted: number
+  chroma_chunks_deleted: number
+}

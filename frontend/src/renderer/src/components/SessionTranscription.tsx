@@ -1,12 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { MicCapsule, type MicState } from '@renderer/components/MicCapsule'
 import { DocumentModal } from '@renderer/components/DocumentModal'
 import { DocumentsButton } from '@renderer/components/DocumentsButton'
 import { useAgent } from '@renderer/hooks/useAgent'
-import { conversationsKeys } from '@renderer/queries/conversationsQueries'
+import {
+  conversationsKeys,
+  useDeleteConversationSessionMutation
+} from '@renderer/queries/conversationsQueries'
 import { useSessionDocumentsQuery } from '@renderer/queries/documentsQueries'
 import type { ConversationSession } from '@renderer/schemas/conversation'
+import { toast } from 'sonner'
 
 type SessionTranscriptionProps = {
   conversationId: number
@@ -18,10 +23,12 @@ export function SessionTranscription({
   conversation
 }: SessionTranscriptionProps): React.JSX.Element {
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const { agentStatus, isRunning, transcript, response, wsError, history, startPipeline } =
     useAgent()
   const lastHistoryCountRef = useRef(0)
   const [docsModalOpen, setDocsModalOpen] = useState(false)
+  const deleteSessionMutation = useDeleteConversationSessionMutation()
   const { data: docsData } = useSessionDocumentsQuery(conversationId)
   const documents = docsData?.documents ?? []
 
@@ -37,6 +44,22 @@ export function SessionTranscription({
     void queryClient.invalidateQueries({ queryKey: conversationsKeys.detail(conversationId) })
     void queryClient.invalidateQueries({ queryKey: conversationsKeys.lists() })
   }, [conversationId, history.length, queryClient])
+
+  const handleDeleteSession = async (): Promise<void> => {
+    const accepted = window.confirm('Delete this session and all attached messages/documents?')
+    if (!accepted) {
+      return
+    }
+
+    try {
+      await deleteSessionMutation.mutateAsync(conversationId)
+      toast.success('Session deleted')
+      await navigate({ to: '/' })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete session'
+      toast.error(message)
+    }
+  }
 
   return (
     <>
@@ -71,6 +94,15 @@ export function SessionTranscription({
           disabled={isRunning}
         />
       </div>
+
+      <button
+        className="corg-session-delete-btn"
+        disabled={deleteSessionMutation.isPending}
+        onClick={() => void handleDeleteSession()}
+        type="button"
+      >
+        {deleteSessionMutation.isPending ? 'Deleting…' : 'Delete session'}
+      </button>
 
       <DocumentsButton count={documents.length} onClick={() => setDocsModalOpen(true)} />
 
