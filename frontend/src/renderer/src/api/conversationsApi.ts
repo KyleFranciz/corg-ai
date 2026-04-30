@@ -5,7 +5,7 @@ import type {
   ConversationSession
 } from '@renderer/schemas/conversation'
 
-export async function fetchConversations(limit = 50): Promise<ConversationSession[]> {
+export async function getConversations(limit = 50): Promise<ConversationSession[]> {
   const response = await apiClient.get<ConversationsResponse>('/conversation', {
     params: {
       limit,
@@ -16,7 +16,7 @@ export async function fetchConversations(limit = 50): Promise<ConversationSessio
   return response.data.conversations
 }
 
-export async function fetchConversationById(conversationId: number): Promise<ConversationSession> {
+export async function getConversationById(conversationId: number): Promise<ConversationSession> {
   const response = await apiClient.get<ConversationResponse>(`/conversation/${conversationId}`)
   return response.data.conversation
 }

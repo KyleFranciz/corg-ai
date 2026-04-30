@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Link } from '@tanstack/react-router'
 import type { ConversationSession } from '@renderer/schemas/conversation'
-import { fetchConversations } from '@renderer/services/conversations'
+import { useConversationsQuery } from '@renderer/queries/conversationsQueries'
+
+const EMPTY_CONVERSATIONS: ConversationSession[] = []
 
 function buildSessionTitle(messages: ConversationSession['messages']): string {
   const firstUserMessage = messages.find((message) => message.role === 'user')
@@ -18,44 +20,18 @@ function buildSessionTitle(messages: ConversationSession['messages']): string {
   return words.join(' ')
 }
 
-export function ConversationHistorySidebar(): React.JSX.Element {
+export function ConversationHistorySidebar({
+  open = false
+}: {
+  open?: boolean
+}): React.JSX.Element {
+  // list refs for conversation cards
   const listRef = useRef<HTMLDivElement | null>(null)
-  const [conversations, setConversations] = useState<ConversationSession[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // data fetching functions (amount of conversations shown in the sidebar is adjustable)
+  const { data: conversationsData, isLoading, error } = useConversationsQuery(50)
+  const conversations: ConversationSession[] = conversationsData ?? EMPTY_CONVERSATIONS
 
-  useEffect(() => {
-    let cancelled = false
-
-    async function loadConversations(): Promise<void> {
-      setIsLoading(true)
-      setError(null)
-
-      try {
-        const rows = await fetchConversations()
-        if (!cancelled) {
-          setConversations(rows)
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          const message =
-            loadError instanceof Error ? loadError.message : 'Failed to load conversations'
-          setError(message)
-        }
-      } finally {
-        if (!cancelled) {
-          setIsLoading(false)
-        }
-      }
-    }
-
-    void loadConversations()
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
+  // function to handle scrolling to the top of the list of convos
   useEffect(() => {
     if (!listRef.current) {
       return
@@ -65,7 +41,10 @@ export function ConversationHistorySidebar(): React.JSX.Element {
   }, [conversations])
 
   return (
-    <aside className="history-sidebar" aria-label="Conversation history">
+    <aside
+      className={`history-sidebar${open ? ' history-sidebar--open' : ''}`}
+      aria-label="Conversation history"
+    >
       <header className="history-sidebar__header">
         <h2>Conversation History</h2>
         <p>{conversations.length} sessions</p>
@@ -73,7 +52,7 @@ export function ConversationHistorySidebar(): React.JSX.Element {
 
       <div className="history-sidebar__list" ref={listRef}>
         {isLoading ? <p className="history-sidebar__empty">Loading conversations...</p> : null}
-        {error ? <p className="history-sidebar__empty">{error}</p> : null}
+        {error ? <p className="history-sidebar__empty">{error.message}</p> : null}
         {!isLoading && !error && conversations.length === 0 ? (
           <p className="history-sidebar__empty">No conversations yet.</p>
         ) : (

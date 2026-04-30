@@ -1,140 +1,422 @@
 @import './base.css';
 
-.app-shell {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  min-height: 100vh;
+/* ============================================================
+   CORG — App Stage (home route full-screen canvas)
+   ============================================================ */
+
+.corg-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--corg-paper);
 }
 
-.app-main {
+.corg-paper-bg {
+  position: absolute;
+  inset: 0;
+  background: var(--corg-paper);
+}
+
+.corg-dashed-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent 79px,
+      var(--corg-grid-line) 79px,
+      var(--corg-grid-line) 80px
+    ),
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0,
+      transparent 79px,
+      var(--corg-grid-line) 79px,
+      var(--corg-grid-line) 80px
+    );
+  mask-image:
+    repeating-linear-gradient(to right, black 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(to bottom, black 0 1px, transparent 1px 6px);
+  -webkit-mask-image:
+    repeating-linear-gradient(to right, black 0 1px, transparent 1px 6px),
+    repeating-linear-gradient(to bottom, black 0 1px, transparent 1px 6px);
+  mask-composite: source-over;
+}
+
+/* ---- Menu button ---- */
+
+.corg-menu-btn {
+  position: absolute;
+  left: 36px;
+  top: 27px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  z-index: 40;
+}
+
+.corg-menu-btn__bar {
+  width: 22px;
+  height: 2px;
+  background: var(--corg-ink);
+  border-radius: 1px;
+  display: block;
+}
+
+/* ---- Content layer (above grid, below sidebar) ---- */
+
+.corg-content {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+}
+
+/* ---- Intro screen ---- */
+
+.corg-intro {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  flex-direction: column;
+  gap: 24px;
 }
 
-.app-main__content {
-  width: min(760px, 100%);
+.corg-wordmark {
+  font-family: var(--corg-serif);
+  font-style: italic;
+  font-size: clamp(96px, 12.8vw, 185px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--corg-ink);
+  user-select: none;
 }
 
-.app-main__actions {
+/* ---- Mic capsule ---- */
+
+.corg-mic {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--corg-ink);
+  transition:
+    width var(--corg-dur) var(--corg-ease),
+    height var(--corg-dur) var(--corg-ease),
+    border-radius var(--corg-dur) var(--corg-ease);
+}
+
+.corg-mic--idle {
+  width: 222px;
+  height: 64px;
+  border-radius: 7px;
+}
+
+.corg-mic--listening {
+  width: 190px;
+  height: 64px;
+  border-radius: 7px;
+}
+
+.corg-mic--thinking {
+  width: 68px;
+  height: 64px;
+  border-radius: 60px;
+}
+
+.corg-mic:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+/* ---- Waveform ---- */
+
+.corg-waveform {
   display: flex;
-  gap: 12px;
-  margin: 16px 0;
+  align-items: center;
+  gap: 6px;
 }
 
-.history-sidebar {
-  border-right: 1px solid #ddd4bc;
-  background: linear-gradient(180deg, #f8f1dd 0%, #f2e6c8 100%);
+.corg-waveform__bar {
+  width: 5px;
+  border-radius: 2px;
+  background: var(--corg-stone-100);
+  animation: corg-wave 600ms cubic-bezier(0.2, 0.8, 0.2, 1) infinite alternate;
+  display: inline-block;
+}
+
+/* ---- Upload button ---- */
+
+.corg-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--corg-ink-faint);
+  border-radius: 0;
+  padding: 8px 2px;
+  cursor: pointer;
+  font-family: var(--corg-serif);
+  font-style: italic;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--corg-ink);
+  margin-top: 8px;
+}
+
+/* ---- Listening screen ---- */
+
+.corg-listening-content {
+  position: absolute;
+  left: min(233px, 16vw);
+  right: min(233px, 16vw);
+  top: 380px;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  gap: 24px;
+}
+
+.corg-label {
+  font-family: var(--corg-sans);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--corg-ink-mute);
+}
+
+/* ---- Thinking screen ---- */
+
+.corg-transcript-top {
+  position: absolute;
+  left: min(233px, 16vw);
+  right: min(233px, 16vw);
+  top: 142px;
+}
+
+.corg-thinking-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.corg-thinking-text {
+  font-family: var(--corg-serif);
+  font-style: italic;
+  font-size: clamp(64px, 8.9vw, 128px);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--corg-ink);
+}
+
+/* ---- Response screen ---- */
+
+.corg-response-content {
+  position: absolute;
+  left: min(233px, 16vw);
+  top: 142px;
+  right: min(233px, 16vw);
+  bottom: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+/* ---- Shared text elements ---- */
+
+.corg-user-transcript {
+  font-family: var(--corg-serif);
+  font-style: italic;
+  font-size: clamp(22px, 2.2vw, 32px);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--corg-ink-soft);
+}
+
+.corg-bubble {
+  background: var(--corg-ink);
+  color: #fff;
+  border-radius: 6px;
+  padding: 19px 32px;
+  font-family: var(--corg-serif);
+  font-size: clamp(22px, 2.2vw, 32px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  white-space: pre-wrap;
+}
+
+/* ---- Mic footer (for listening/thinking/response) ---- */
+
+.corg-mic-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 80px;
+  display: flex;
+  justify-content: center;
+}
+
+/* ---- Error ---- */
+
+.corg-error {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--corg-sans);
+  font-size: 14px;
+  color: rgba(180, 40, 40, 0.85);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   CORG — Sidebar (Conversation History)
+   ============================================================ */
+
+.history-sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 309px;
+  background: var(--corg-stone-200);
+  border-right: 1px solid var(--corg-stone-400);
+  transform: translateX(-100%);
+  transition: transform var(--corg-dur) var(--corg-ease);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+}
+
+.history-sidebar--open {
+  transform: translateX(0);
 }
 
 .history-sidebar__header {
-  padding: 20px;
-  border-bottom: 1px solid #ddd4bc;
+  padding: 120px 20px 16px;
+  flex-shrink: 0;
 }
 
 .history-sidebar__header h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-family: var(--corg-serif);
+  font-size: 36px;
+  font-weight: normal;
+  letter-spacing: -0.02em;
+  color: var(--corg-ink-soft);
 }
 
 .history-sidebar__header p {
-  margin: 6px 0 0;
-  color: #5d5746;
+  display: none;
 }
 
 .history-sidebar__list {
   overflow-y: auto;
-  padding: 14px;
+  padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 4px;
+  flex: 1;
 }
 
 .history-sidebar__empty {
-  color: #6a634f;
+  padding: 0 12px;
+  font-family: var(--corg-sans);
+  font-size: 14px;
+  color: var(--corg-ink-mute);
+  margin: 0;
 }
 
 .history-turn {
-  background: #fff9e9;
-  border: 1px solid #e2d7b9;
-  border-radius: 10px;
-  padding: 10px;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 46px;
+  padding: 0 12px;
+  border-radius: 7px;
+  background: transparent;
   text-decoration: none;
-  display: block;
-  transition: border-color 120ms ease, transform 120ms ease;
+  box-sizing: border-box;
+  transition: background var(--corg-dur-fast) var(--corg-ease);
 }
 
 .history-turn:hover {
-  border-color: #cbbd97;
-  transform: translateY(-1px);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .history-turn--active {
-  border-color: #9f8a54;
-  background: #fff3d4;
+  background: var(--corg-stone-300);
 }
 
 .history-turn__title {
-  margin: 0 0 8px;
-  font-size: 0.95rem;
-  color: #2d2a22;
+  margin: 0;
+  font-family: var(--corg-sans);
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--corg-ink-pure);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .history-turn__messages {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: none;
 }
 
-.conversation-page {
+/* ============================================================
+   CORG — Conversation detail route (matches design screen 05)
+   ============================================================ */
+
+.corg-back-btn {
+  position: absolute;
+  left: 36px;
+  top: 27px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
-  padding: 20px;
-  background: #fbfaf2;
+  color: var(--corg-ink);
+  text-decoration: none;
+  z-index: 40;
+  opacity: 0.7;
+  transition: opacity var(--corg-dur-fast) var(--corg-ease);
 }
 
-.conversation-page__content {
-  width: min(900px, 100%);
+.corg-back-btn:hover {
+  opacity: 1;
 }
 
-.conversation-page__header {
-  margin-bottom: 16px;
-}
-
-.chat-thread {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  width: 100%;
-}
-
-.chat-bubble {
-  max-width: 80%;
-  border-radius: 12px;
-  padding: 10px 12px;
-  border: 1px solid #ddd4bc;
-}
-
-.chat-bubble p {
+.corg-state-label {
+  font-family: var(--corg-sans);
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--corg-ink-mute);
   margin: 0;
-  line-height: 1.4;
 }
 
-.chat-bubble--user {
-  align-self: flex-end;
-  background: #e8f3de;
-}
-
-.chat-bubble--agent {
-  align-self: flex-start;
-  background: #fff9e9;
-}
+/* ============================================================
+   AboutRoute
+   ============================================================ */
 
 .page-center {
   min-height: 100vh;
@@ -146,30 +428,4 @@
 
 .page-center__content {
   width: min(760px, 100%);
-}
-
-.history-turn p {
-  margin: 0 0 8px;
-  line-height: 1.4;
-}
-
-.history-turn p:last-child {
-  margin-bottom: 0;
-}
-
-.history-turn__meta {
-  color: #5d5746;
-  font-size: 0.85rem;
-}
-
-@media (max-width: 880px) {
-  .app-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .history-sidebar {
-    min-height: auto;
-    border-right: none;
-    border-bottom: 1px solid #ddd4bc;
-  }
 }
