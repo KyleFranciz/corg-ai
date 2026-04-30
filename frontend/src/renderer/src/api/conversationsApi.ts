@@ -1,10 +1,16 @@
 import { apiClient } from '@renderer/lib/apiClient'
 import type {
+  CreateSessionResponse,
   ConversationResponse,
   ConversationsResponse,
   ConversationSession,
   FollowUpQuestionResponse
 } from '@renderer/schemas/conversation'
+
+export async function createConversationSession(): Promise<CreateSessionResponse> {
+  const response = await apiClient.post<CreateSessionResponse>('/conversation/session')
+  return response.data
+}
 
 export async function getConversations(limit = 50): Promise<ConversationSession[]> {
   const response = await apiClient.get<ConversationsResponse>('/conversation', {

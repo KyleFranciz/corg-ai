@@ -3,6 +3,7 @@ import { useAgent } from '@renderer/hooks/useAgent'
 import { ConversationHistorySidebar } from '@renderer/components/ConversationHistorySidebar'
 import { MicCapsule, type MicState } from '@renderer/components/MicCapsule'
 import { useUploadDocumentsMutation } from '@renderer/queries/documentsQueries'
+import { useCreateConversationSessionMutation } from '@renderer/queries/conversationsQueries'
 import { toast } from 'sonner'
 
 function PaperBg(): React.JSX.Element {
@@ -71,11 +72,13 @@ function App(): React.JSX.Element {
     response,
     wsError,
     startPipeline,
-    history
+    currentSessionId
   } = useAgent()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadMutation = useUploadDocumentsMutation()
+  const createSessionMutation = useCreateConversationSessionMutation()
   const hasSeenConnectionRef = useRef(false)
 
   const micState: MicState =
@@ -94,20 +97,27 @@ function App(): React.JSX.Element {
     fileInputRef.current?.click()
   }
 
-  const handleFileSelection = (event: ChangeEvent<HTMLInputElement>): void => {
+  const handleFileSelection = async (event: ChangeEvent<HTMLInputElement>): Promise<void> => {
     const files = Array.from(event.target.files ?? [])
     if (files.length === 0) {
       return
     }
 
-    const latestTurn = history[history.length - 1]
-    if (!latestTurn) {
-      toast.error('Start a conversation before uploading documents')
-      event.target.value = ''
-      return
+    let sessionId = activeSessionId
+    if (!sessionId) {
+      try {
+        const created = await createSessionMutation.mutateAsync()
+        sessionId = created.session_id
+        setActiveSessionId(sessionId)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to create session'
+        toast.error(message)
+        event.target.value = ''
+        return
+      }
     }
 
-    uploadMutation.mutate({ sessionId: latestTurn.sessionId, files }, {
+    uploadMutation.mutate({ sessionId, files }, {
       onSuccess: (data) => {
         const successfulCount = data.uploaded_files.length
         const failedCount = data.failed_files.length
@@ -125,6 +135,17 @@ function App(): React.JSX.Element {
       }
     })
     event.target.value = ''
+  }
+
+  useEffect(() => {
+    if (currentSessionId && activeSessionId !== currentSessionId) {
+      setActiveSessionId(currentSessionId)
+    }
+  }, [activeSessionId, currentSessionId])
+
+  const handleStartPipeline = async (): Promise<void> => {
+    const options = activeSessionId ? { conversationId: activeSessionId } : undefined
+    await startPipeline(options)
   }
 
   useEffect(() => {
@@ -155,7 +176,7 @@ function App(): React.JSX.Element {
             <div className="corg-wordmark">Corg</div>
             <MicCapsule
               state={micState}
-              onClick={() => void startPipeline()}
+              onClick={() => void handleStartPipeline()}
               disabled={isRunning}
             />
             <input
@@ -213,7 +234,11 @@ function App(): React.JSX.Element {
               {response ? <div className="corg-bubble">{response}</div> : null}
             </div>
             <div className="corg-mic-footer">
-              <MicCapsule state="idle" onClick={() => void startPipeline()} disabled={isRunning} />
+              <MicCapsule
+                state="idle"
+                onClick={() => void handleStartPipeline()}
+                disabled={isRunning}
+              />
             </div>
           </>
         )}

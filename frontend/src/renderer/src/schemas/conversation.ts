@@ -13,7 +13,13 @@ export type ConversationSession = {
   summary: string | null
   last_message_at: string | null
   message_count: number
+  document_count: number
   messages: ConversationMessage[]
+}
+
+export type CreateSessionResponse = {
+  session_id: number
+  started_at: string | null
 }
 
 export type ConversationsResponse = {

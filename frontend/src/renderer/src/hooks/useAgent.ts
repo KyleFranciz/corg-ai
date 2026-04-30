@@ -29,6 +29,7 @@ export type UseAgentResult = {
   audioDuration: number | null
   history: ConversationTurn[]
   wsError: string | null
+  currentSessionId: number | null
   reconnectAttempt: number
   connect: () => Promise<void>
   startPipeline: (options?: { conversationId?: number }) => Promise<void>
@@ -77,6 +78,7 @@ export function useAgent(): UseAgentResult {
   const [audioDuration, setAudioDuration] = useState<number | null>(null)
   const [history, setHistory] = useState<ConversationTurn[]>([])
   const [wsError, setWsError] = useState<string | null>(null)
+  const [currentSessionId, setCurrentSessionId] = useState<number | null>(null)
   const [reconnectAttempt, setReconnectAttempt] = useState(0)
 
   const reconnectAttemptRef = useRef(0)
@@ -126,6 +128,8 @@ export function useAgent(): UseAgentResult {
         if (!pipelineEvent) {
           return
         }
+
+        setCurrentSessionId(pipelineEvent.session_id)
 
         if (pipelineEvent.type === 'response_chunk') {
           setResponse((previous) => `${previous ?? ''}${pipelineEvent.content}`)
@@ -371,6 +375,7 @@ export function useAgent(): UseAgentResult {
     audioDuration,
     history,
     wsError,
+    currentSessionId,
     reconnectAttempt,
     connect,
     startPipeline,

@@ -424,6 +424,8 @@
 
 .history-turn__title {
   margin: 0;
+  min-width: 0;
+  flex: 1;
   font-family: var(--corg-sans);
   font-size: 16px;
   font-weight: 400;
@@ -432,6 +434,21 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.history-turn__title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.history-turn__doc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #2f9e44;
+  flex-shrink: 0;
 }
 
 .history-turn__messages {

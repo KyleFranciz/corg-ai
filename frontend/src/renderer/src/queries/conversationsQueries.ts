@@ -6,10 +6,15 @@ import {
 } from '@tanstack/react-query'
 import {
   askFollowUpQuestion,
+  createConversationSession,
   getConversationById,
   getConversations
 } from '@renderer/api/conversationsApi'
-import type { ConversationSession, FollowUpQuestionResponse } from '@renderer/schemas/conversation'
+import type {
+  ConversationSession,
+  CreateSessionResponse,
+  FollowUpQuestionResponse
+} from '@renderer/schemas/conversation'
 
 export const conversationsKeys = {
   all: ['conversations'] as const,
@@ -67,5 +72,15 @@ export function useAskFollowUpQuestionMutation(
       await queryClient.invalidateQueries({ queryKey: conversationsKeys.detail(conversationId) })
       await queryClient.invalidateQueries({ queryKey: conversationsKeys.lists() })
     }
+  })
+}
+
+export function useCreateConversationSessionMutation(): UseMutationResult<
+  CreateSessionResponse,
+  Error,
+  void
+> {
+  return useMutation<CreateSessionResponse, Error, void>({
+    mutationFn: createConversationSession
   })
 }

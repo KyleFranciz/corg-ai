@@ -20,6 +20,10 @@ function buildSessionTitle(messages: ConversationSession['messages']): string {
   return words.join(' ')
 }
 
+function isDocumentsOnlySession(conversation: ConversationSession): boolean {
+  return conversation.message_count === 0 && conversation.document_count > 0
+}
+
 export function ConversationHistorySidebar({
   open = false
 }: {
@@ -66,7 +70,16 @@ export function ConversationHistorySidebar({
                 params={{ conversationId: String(conversation.session_id) }}
                 to="/conversation/$conversationId"
               >
-                <h3 className="history-turn__title">{buildSessionTitle(conversation.messages)}</h3>
+                <div className="history-turn__title-row">
+                  {isDocumentsOnlySession(conversation) ? (
+                    <span
+                      aria-label="Session has documents"
+                      className="history-turn__doc-dot"
+                      title="Session has documents"
+                    />
+                  ) : null}
+                  <h3 className="history-turn__title">{buildSessionTitle(conversation.messages)}</h3>
+                </div>
               </Link>
             ))
         )}

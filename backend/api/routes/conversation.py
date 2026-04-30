@@ -8,7 +8,7 @@ from sqlmodel import func, select
 from sqlmodel import Session as DbSession
 
 from database.database_engine import engine
-from database.models import MessageRole, Messages, Session
+from database.models import Documents, MessageRole, Messages, Session
 from services.agent import generate_agent_response, retrieve_context
 
 router = APIRouter(tags=["conversation"])
@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 def _build_conversation(
-    session_row: Session, messages: list[Messages]
+    session_row: Session,
+    messages: list[Messages],
+    document_count: int,
 ) -> dict[str, Any]:
     started_at = session_row.started_at
     ended_at = session_row.ended_at
@@ -49,6 +51,7 @@ def _build_conversation(
         "summary": summary,
         "last_message_at": last_message_at.isoformat() if last_message_at else None,
         "message_count": message_count,
+        "document_count": document_count,
         "messages": messages_payload,
     }
 
@@ -79,6 +82,25 @@ class FollowUpQuestionResponse(BaseModel):
     question: str
     response: str
     retrieved_context_count: int
+
+
+class CreateSessionResponse(BaseModel):
+    session_id: int
+    started_at: str | None
+
+
+@router.post("/conversation/session")
+def create_conversation_session() -> CreateSessionResponse:
+    with DbSession(engine) as db:
+        session_row = Session()
+        db.add(session_row)
+        db.commit()
+        db.refresh(session_row)
+
+        return CreateSessionResponse(
+            session_id=session_row.id or 0,
+            started_at=session_row.started_at.isoformat() if session_row.started_at else None,
+        )
 
 
 @router.get("/conversation")
@@ -114,6 +136,19 @@ def list_conversations(
         )
 
         session_rows = list(db.exec(statement))
+        session_ids = [session.id for session in session_rows if session.id is not None]
+
+        document_counts_by_session: dict[int, int] = {}
+        if session_ids:
+            document_counts_statement = (
+                select(Documents.session_id, func.count(Documents.id))
+                .where(Documents.session_id.in_(session_ids))
+                .group_by(Documents.session_id)
+            )
+            for session_id, count in db.exec(document_counts_statement):
+                if session_id is None:
+                    continue
+                document_counts_by_session[session_id] = int(count)
 
         conversations: list[dict[str, Any]] = []
 
@@ -135,12 +170,13 @@ def list_conversations(
                         "summary": session_row.summary,
                         "last_message_at": last_at.isoformat() if last_at else None,
                         "message_count": 0,
+                        "document_count": document_counts_by_session.get(
+                            session_row.id or 0, 0
+                        ),
                         "messages": [],
                     }
                 )
         else:
-            # get an array of session ids
-            session_ids = [s.id for s in session_rows]
             # get messages where the session id is connected with the message
             messages_statement = select(Messages).where(
                 Messages.session_id.in_(session_ids)
@@ -153,7 +189,13 @@ def list_conversations(
 
             for session_row in session_rows:
                 msgs = messages_by_session.get(session_row.id, [])
-                conversations.append(_build_conversation(session_row, msgs))
+                conversations.append(
+                    _build_conversation(
+                        session_row,
+                        msgs,
+                        document_counts_by_session.get(session_row.id or 0, 0),
+                    )
+                )
 
         logger.info(
             "Listed conversations sessions=%s include_messages=%s",
@@ -175,7 +217,14 @@ def get_conversation(conversation_id: int) -> dict[str, Any]:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
         messages = _fetch_session_messages(db, conversation_id)
-        conversation = _build_conversation(session_row, messages)
+        document_count = len(
+            list(
+                db.exec(
+                    select(Documents.id).where(Documents.session_id == conversation_id)
+                )
+            )
+        )
+        conversation = _build_conversation(session_row, messages, document_count)
 
         return {
             "conversation": conversation,
