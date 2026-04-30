@@ -472,6 +472,171 @@
 }
 
 /* ============================================================
+   CORG — Documents button (floating, bottom-right of conversation)
+   ============================================================ */
+
+.corg-docs-btn {
+  position: absolute;
+  bottom: 80px;
+  right: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 18px;
+  background: var(--corg-ink);
+  color: var(--corg-white);
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: var(--corg-sans);
+  font-size: 14px;
+  letter-spacing: -0.01em;
+  z-index: 20;
+  transition: opacity var(--corg-dur-fast) var(--corg-ease);
+}
+
+.corg-docs-btn:hover {
+  opacity: 0.85;
+}
+
+/* ============================================================
+   CORG — Document modal (page 18)
+   ============================================================ */
+
+.corg-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.18);
+  z-index: 50;
+}
+
+.corg-modal {
+  position: fixed;
+  bottom: 140px;
+  right: 36px;
+  width: 360px;
+  max-height: 480px;
+  background: var(--corg-paper);
+  border: 1px solid var(--corg-stone-400);
+  border-radius: 10px;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.1),
+    0 1px 4px rgba(0, 0, 0, 0.06);
+  z-index: 51;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.corg-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px 16px;
+  flex-shrink: 0;
+}
+
+.corg-modal__title {
+  margin: 0;
+  font-family: var(--corg-serif);
+  font-style: italic;
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--corg-ink);
+}
+
+.corg-modal__close {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--corg-ink-mute);
+  transition: color var(--corg-dur-fast) var(--corg-ease);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.corg-modal__close:hover {
+  color: var(--corg-ink);
+}
+
+.corg-modal__divider {
+  height: 1px;
+  background: var(--corg-stone-300);
+  flex-shrink: 0;
+}
+
+.corg-modal__empty {
+  margin: 0;
+  padding: 20px 24px;
+  font-family: var(--corg-sans);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--corg-ink-mute);
+}
+
+.corg-modal__list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.corg-doc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 24px;
+  transition: background var(--corg-dur-fast) var(--corg-ease);
+}
+
+.corg-doc-item:hover {
+  background: var(--corg-paper-2);
+}
+
+.corg-doc-item__icon {
+  color: var(--corg-ink-mute);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.corg-doc-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.corg-doc-item__name {
+  font-family: var(--corg-sans);
+  font-size: 15px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  color: var(--corg-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.corg-doc-item__meta {
+  font-family: var(--corg-sans);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--corg-ink-mute);
+}
+
+/* ============================================================
    AboutRoute
    ============================================================ */
 

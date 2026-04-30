@@ -63,8 +63,16 @@ function UploadButton({
 }
 
 function App(): React.JSX.Element {
-  const { agentStatus, connectionState, isRunning, transcript, response, wsError, startPipeline } =
-    useAgent()
+  const {
+    agentStatus,
+    connectionState,
+    isRunning,
+    transcript,
+    response,
+    wsError,
+    startPipeline,
+    history
+  } = useAgent()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadMutation = useUploadDocumentsMutation()
@@ -92,7 +100,14 @@ function App(): React.JSX.Element {
       return
     }
 
-    uploadMutation.mutate(files, {
+    const latestTurn = history[history.length - 1]
+    if (!latestTurn) {
+      toast.error('Start a conversation before uploading documents')
+      event.target.value = ''
+      return
+    }
+
+    uploadMutation.mutate({ sessionId: latestTurn.sessionId, files }, {
       onSuccess: (data) => {
         const successfulCount = data.uploaded_files.length
         const failedCount = data.failed_files.length

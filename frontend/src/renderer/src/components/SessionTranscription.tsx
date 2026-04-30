@@ -1,8 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { MicCapsule, type MicState } from '@renderer/components/MicCapsule'
+import { DocumentModal } from '@renderer/components/DocumentModal'
+import { DocumentsButton } from '@renderer/components/DocumentsButton'
 import { useAgent } from '@renderer/hooks/useAgent'
 import { conversationsKeys } from '@renderer/queries/conversationsQueries'
+import { useSessionDocumentsQuery } from '@renderer/queries/documentsQueries'
 import type { ConversationSession } from '@renderer/schemas/conversation'
 
 type SessionTranscriptionProps = {
@@ -18,6 +21,9 @@ export function SessionTranscription({
   const { agentStatus, isRunning, transcript, response, wsError, history, startPipeline } =
     useAgent()
   const lastHistoryCountRef = useRef(0)
+  const [docsModalOpen, setDocsModalOpen] = useState(false)
+  const { data: docsData } = useSessionDocumentsQuery(conversationId)
+  const documents = docsData?.documents ?? []
 
   const micState: MicState =
     agentStatus === 'listening' ? 'listening' : agentStatus === 'thinking' ? 'thinking' : 'idle'
@@ -65,6 +71,12 @@ export function SessionTranscription({
           disabled={isRunning}
         />
       </div>
+
+      <DocumentsButton count={documents.length} onClick={() => setDocsModalOpen(true)} />
+
+      {docsModalOpen ? (
+        <DocumentModal documents={documents} onClose={() => setDocsModalOpen(false)} />
+      ) : null}
 
       {transcript ? <p className="corg-state-label">{transcript}</p> : null}
       {response ? <div className="corg-bubble">{response}</div> : null}
