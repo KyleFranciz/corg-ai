@@ -125,16 +125,18 @@ export function DocumentModal({
           onDragLeave={() => setDragging(false)}
           onDrop={handleDrop}
         >
-          <PaperclipIcon />
-          <span className="corg-modal__dropzone-text">
-            {isUploading ? (
-              'Uploading…'
-            ) : (
-              <>
-                Drop a file, or <span>choose one</span>
-              </>
-            )}
-          </span>
+          <div className="corg-modal__dropzone-main">
+            <PaperclipIcon />
+            <span className="corg-modal__dropzone-text">
+              {isUploading ? (
+                'Uploading…'
+              ) : (
+                <>
+                  Drop a file, or <span>choose one</span>
+                </>
+              )}
+            </span>
+          </div>
           <span className="corg-modal__dropzone-hint">PDF · DOCX · TXT · MD · up to 50 MB</span>
           <input
             ref={fileInputRef}

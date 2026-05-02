@@ -598,7 +598,9 @@
   background: var(--corg-paper);
   border: 1px dashed var(--corg-ink);
   border-radius: 6px;
-  box-shadow: 16px 16px 0 -1px var(--corg-paper-2), 16px 16px 0 0 var(--corg-ink-faint);
+  box-shadow:
+    16px 16px 0 -1px var(--corg-paper-2),
+    16px 16px 0 0 var(--corg-ink-faint);
   z-index: 51;
   display: flex;
   flex-direction: column;
@@ -635,6 +637,7 @@
   position: absolute;
   right: 24px;
   top: 24px;
+  z-index: 1;
   width: 32px;
   height: 32px;
   display: flex;
@@ -659,12 +662,11 @@
   border-radius: 6px;
   background: var(--corg-paper-2);
   cursor: pointer;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: center;
-  gap: 16px;
+  padding: 0 28px;
   flex-shrink: 0;
-  position: relative;
   transition: background var(--corg-dur-fast) var(--corg-ease);
 }
 
@@ -672,13 +674,20 @@
   background: var(--corg-stone-200);
 }
 
+.corg-modal__dropzone-main {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  gap: 17px;
+  pointer-events: none;
+}
+
 .corg-modal__dropzone-text {
   font-family: var(--corg-serif);
   font-style: italic;
-  font-size: 30px;
+  font-size: 28px;
   letter-spacing: -0.02em;
   color: var(--corg-ink);
-  pointer-events: none;
 }
 
 .corg-modal__dropzone-text span {
@@ -687,10 +696,10 @@
 }
 
 .corg-modal__dropzone-hint {
-  position: absolute;
-  right: 28px;
+  grid-column: 3;
+  text-align: right;
   font-family: var(--corg-sans);
-  font-size: 13px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--corg-ink-mute);
