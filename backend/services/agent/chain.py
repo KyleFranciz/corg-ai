@@ -180,13 +180,13 @@ def _normalize_stream_chunk_content(content: Any) -> str:
     return str(content)
 
 
-def retrieve_context(user_text: str) -> list[RetrievedChunk]:
+def retrieve_context(user_text: str, session_id: int | None = None) -> list[RetrievedChunk]:
     clean_user_text = user_text.strip()
     if not clean_user_text:
         return []
 
     started_at = time.perf_counter()
-    chunks = retrieve_relevant_chunks(clean_user_text)
+    chunks = retrieve_relevant_chunks(clean_user_text, session_id=session_id)
     logger.info(
         "Retrieved context chunks=%s user_chars=%s duration_seconds=%.3f",
         len(chunks),

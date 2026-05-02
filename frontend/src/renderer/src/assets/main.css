@@ -158,13 +158,56 @@
   display: inline-block;
 }
 
-.corg-thinking-spinner {
-  animation-name: corg-spin;
-  animation-timing-function: linear;
-  animation-iteration-count: infinite;
-  transform-origin: center;
+.corg-cube-scene {
+  width: 28px;
+  height: 28px;
+  perspective: 70px;
+  flex-shrink: 0;
+}
+
+.corg-cube {
+  width: 28px;
+  height: 28px;
+  position: relative;
   transform-style: preserve-3d;
-  backface-visibility: hidden;
+  animation: corg-cube-spin linear infinite;
+}
+
+.corg-cube__face {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid #ffffff;
+  background: transparent;
+  box-sizing: border-box;
+}
+
+.corg-cube__face--front {
+  transform: rotateY(0deg) translateZ(12px);
+}
+.corg-cube__face--back {
+  transform: rotateY(180deg) translateZ(12px);
+}
+.corg-cube__face--left {
+  transform: rotateY(-90deg) translateZ(12px);
+}
+.corg-cube__face--right {
+  transform: rotateY(90deg) translateZ(12px);
+}
+.corg-cube__face--top {
+  transform: rotateX(90deg) translateZ(12px);
+}
+.corg-cube__face--bottom {
+  transform: rotateX(-90deg) translateZ(12px);
+}
+
+@keyframes corg-cube-spin {
+  0% {
+    transform: rotateX(-20deg) rotateY(0deg);
+  }
+  100% {
+    transform: rotateX(-20deg) rotateY(360deg);
+  }
 }
 
 /* ---- Upload button ---- */
@@ -232,6 +275,36 @@
   letter-spacing: -0.02em;
   line-height: 1;
   color: var(--corg-ink);
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.corg-thinking-dots {
+  display: inline-flex;
+}
+
+.corg-thinking-dot {
+  opacity: 0;
+  animation: corg-thinking-dot 1.4s ease-in-out infinite;
+}
+
+.corg-thinking-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.corg-thinking-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes corg-thinking-dot {
+  0%,
+  55%,
+  100% {
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
 }
 
 /* ---- Response screen ---- */
@@ -327,6 +400,13 @@
   line-height: 1.15;
   letter-spacing: -0.02em;
   white-space: pre-wrap;
+}
+
+.corg-transcription-waveform {
+  position: absolute;
+  left: 50%;
+  bottom: 164px;
+  transform: translateX(-50%);
 }
 
 /* ---- Mic footer (for listening/thinking/response) ---- */

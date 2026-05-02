@@ -245,6 +245,7 @@ def _upsert_document(
                 "chunk_hash": _sha256(chunk_text),
                 "document_hash": text_hash,
                 "updated_at": datetime.now(timezone.utc).isoformat(),
+                "session_id": session_id if session_id is not None else 0,
             }
         )
 

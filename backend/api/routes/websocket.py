@@ -249,7 +249,7 @@ async def _run_audio_pipeline(
             'started',
             'Retrieving context from ChromaDB',
         )
-        retrieved_chunks = await asyncio.to_thread(retrieve_context, transcript)
+        retrieved_chunks = await asyncio.to_thread(retrieve_context, transcript, session_id)
         stage_timings['retrieving_seconds'] = round(
             time.perf_counter() - stage_started_at,
             3,
@@ -489,22 +489,27 @@ async def _handle_websocket(websocket: WebSocket) -> None:
     await manager.connect(websocket)
 
     with DbSession(engine) as db:
-        session_record = SessionRecord()
-        db.add(session_record)
-        db.commit()
-        db.refresh(session_record)
-        session_id = session_record.id
-
-        await _send_status(
-            websocket,
-            session_id,
-            'connected',
-            'connected',
-            'Connected to FastAPI WebSocket',
-        )
-
-        logger.info('WebSocket session created session_id=%s', session_id)
+        # Session record is created lazily — only when start_pipeline arrives
+        # without an explicit conversation_id. This prevents an empty orphaned
+        # session from being saved every time the frontend supplies its own id.
+        session_record: SessionRecord | None = None
         last_transcript: str | None = None
+
+        # Use session_id=0 as a placeholder in the initial connected message
+        # since no real session exists yet.
+        await manager.send_personal_json(
+            {
+                'type': 'status',
+                'session_id': 0,
+                'stage': 'connected',
+                'state': 'connected',
+                'message': 'Connected to FastAPI WebSocket',
+                'details': {},
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+            },
+            websocket,
+        )
+        logger.info('WebSocket connection established (session will be created on first pipeline run)')
 
         try:
             while True:
@@ -518,14 +523,13 @@ async def _handle_websocket(websocket: WebSocket) -> None:
 
                 if action != 'start_pipeline':
                     logger.warning(
-                        'Unknown WebSocket action session_id=%s raw=%s',
-                        session_id,
+                        'Unknown WebSocket action raw=%s',
                         message,
                     )
                     await manager.send_personal_json(
                         {
                             'type': 'error',
-                            'session_id': session_id,
+                            'session_id': session_record.id if session_record else 0,
                             'stage': 'command',
                             'message': 'Unknown command. Use {"action":"start_pipeline"}.',
                         },
@@ -533,21 +537,33 @@ async def _handle_websocket(websocket: WebSocket) -> None:
                     )
                     continue
 
-                target_session_id = _resolve_target_session_id(
-                    requested_conversation_id=requested_conversation_id,
-                    fallback_session_id=session_id,
-                    db=db,
-                )
+                # Resolve which session to run the pipeline against.
+                # If a conversation_id was provided, validate and use that existing session.
+                # If not, create a new session record lazily (only once per connection).
+                if requested_conversation_id is not None:
+                    if requested_conversation_id <= 0:
+                        target_session_id = None
+                    else:
+                        existing_session = db.get(SessionRecord, requested_conversation_id)
+                        target_session_id = existing_session.id if existing_session is not None else None
+                else:
+                    if session_record is None:
+                        session_record = SessionRecord()
+                        db.add(session_record)
+                        db.commit()
+                        db.refresh(session_record)
+                        logger.info('Session created lazily session_id=%s', session_record.id)
+                    target_session_id = session_record.id
+
                 if target_session_id is None:
                     logger.warning(
-                        'Invalid conversation_id for pipeline session_id=%s conversation_id=%s',
-                        session_id,
+                        'Invalid conversation_id for pipeline conversation_id=%s',
                         requested_conversation_id,
                     )
                     await manager.send_personal_json(
                         {
                             'type': 'error',
-                            'session_id': session_id,
+                            'session_id': session_record.id if session_record else 0,
                             'stage': 'command',
                             'message': 'Invalid conversation_id. Provide an existing positive id.',
                         },
@@ -560,31 +576,32 @@ async def _handle_websocket(websocket: WebSocket) -> None:
                     websocket,
                 )
                 logger.info(
-                    'Pipeline trigger acknowledged socket_session_id=%s target_session_id=%s',
-                    session_id,
+                    'Pipeline trigger acknowledged target_session_id=%s',
                     target_session_id,
                 )
                 pipeline_result = await _run_audio_pipeline(websocket, target_session_id, db)
                 if pipeline_result:
                     last_transcript = pipeline_result['transcript']
         except WebSocketDisconnect:
-            logger.info('WebSocket disconnected session_id=%s', session_id)
+            logger.info('WebSocket disconnected')
         finally:
             manager.disconnect(websocket)
 
-            session_record.ended_at = datetime.now(timezone.utc)
-            session_record.summary = last_transcript or 'No transcript captured'
-
-            try:
-                db.add(session_record)
-                db.commit()
-                logger.info('WebSocket session closed session_id=%s', session_id)
-            except Exception:
-                db.rollback()
-                logger.exception(
-                    'Failed to persist WebSocket session closure session_id=%s',
-                    session_id,
-                )
+            # Only persist the session record if one was actually created during
+            # this connection (i.e. the pipeline ran without an explicit conversation_id).
+            if session_record is not None:
+                session_record.ended_at = datetime.now(timezone.utc)
+                session_record.summary = last_transcript or 'No transcript captured'
+                try:
+                    db.add(session_record)
+                    db.commit()
+                    logger.info('WebSocket session closed session_id=%s', session_record.id)
+                except Exception:
+                    db.rollback()
+                    logger.exception(
+                        'Failed to persist WebSocket session closure session_id=%s',
+                        session_record.id,
+                    )
 
 
 @router.websocket('/ws')

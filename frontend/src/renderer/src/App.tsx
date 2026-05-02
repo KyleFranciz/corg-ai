@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { useAgent } from '@renderer/hooks/useAgent'
 import { ConversationHistorySidebar } from '@renderer/components/ConversationHistorySidebar'
 import { MicCapsule, type MicState } from '@renderer/components/MicCapsule'
+import { ThinkingText } from '@renderer/components/ThinkingText'
 import { useUploadDocumentsMutation } from '@renderer/queries/documentsQueries'
 import { useCreateConversationSessionMutation } from '@renderer/queries/conversationsQueries'
 import { toast } from 'sonner'
@@ -221,7 +222,7 @@ function App(): React.JSX.Element {
               </div>
             ) : null}
             <div className="corg-thinking-center">
-              <div className="corg-thinking-text">Thinking…</div>
+              <ThinkingText />
             </div>
             <div className="corg-mic-footer">
               <MicCapsule state="thinking" />

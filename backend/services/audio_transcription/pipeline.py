@@ -23,15 +23,15 @@ class PipelineResult(TypedDict):
 
 
 def _offline_mode_enabled() -> bool:
-    return os.getenv('CORG_OFFLINE_MODE', 'true').strip().lower() != 'false'
+    return os.getenv("CORG_OFFLINE_MODE", "true").strip().lower() != "false"
 
 
 def _set_offline_env_flags() -> None:
     if not _offline_mode_enabled():
         return
 
-    os.environ.setdefault('HF_HUB_OFFLINE', '1')
-    os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 
 # model for making text to speech
@@ -62,9 +62,9 @@ def _get_whisper_model() -> Any:
 
         _set_offline_env_flags()
         _whisper_model = WhisperModel(
-            'base',
-            device='cpu',
-            compute_type='int8',
+            "base",
+            device="cpu",
+            compute_type="int8",
             local_files_only=_offline_mode_enabled(),
         )
     return _whisper_model
@@ -183,7 +183,16 @@ def speak_response(
         raise RuntimeError("Cannot run Piper with empty text")
 
     result = subprocess.run(
-        ["python", "-m", "piper", "--model", model_path, "--output-raw"],
+        [
+            "python",
+            "-m",
+            "piper",
+            "--model",
+            model_path,
+            "--output-raw",
+            "--length-scale",
+            "0.85",
+        ],
         input=text.encode(),
         capture_output=True,
         check=False,

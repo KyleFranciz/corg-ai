@@ -36,11 +36,19 @@ def _read_top_k() -> int:
     return parsed if parsed > 0 else DEFAULT_RETRIEVAL_TOP_K
 
 
-def retrieve_relevant_chunks(query: str, top_k: int | None = None) -> list[RetrievedChunk]:
+def retrieve_relevant_chunks(
+    query: str,
+    top_k: int | None = None,
+    session_id: int | None = None,
+) -> list[RetrievedChunk]:
     """
     Queries all Chroma chunk collections for text chunks most relevant to the given query.
     Each collection is searched independently, results are merged, sorted by semantic
     distance, and the top-K are returned. Skips collections that fail without aborting.
+
+    If session_id is provided, only chunks that were ingested under that session are
+    returned. This prevents documents from other conversations from leaking into the
+    current session's context.
     """
     clean_query = query.strip()
     if not clean_query:
@@ -57,11 +65,14 @@ def retrieve_relevant_chunks(query: str, top_k: int | None = None) -> list[Retri
     for collection_name in collection_names:
         try:
             collection = get_collection(collection_name)
-            results = collection.query(
-                query_texts=[clean_query],
-                n_results=limit,
-                include=['documents', 'metadatas', 'distances'],
-            )
+            query_kwargs: dict = {
+                'query_texts': [clean_query],
+                'n_results': limit,
+                'include': ['documents', 'metadatas', 'distances'],
+            }
+            if session_id is not None:
+                query_kwargs['where'] = {'session_id': session_id}
+            results = collection.query(**query_kwargs)
         except Exception:
             logger.exception('Failed querying collection=%s', collection_name)
             continue

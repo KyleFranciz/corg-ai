@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { MicCapsule, type MicState } from '@renderer/components/MicCapsule'
+import { Waveform } from '@renderer/components/Waveform'
 import { DocumentModal } from '@renderer/components/DocumentModal'
 import { DocumentsButton } from '@renderer/components/DocumentsButton'
 import { useAgent } from '@renderer/hooks/useAgent'
@@ -28,9 +29,18 @@ export function SessionTranscription({
 }: SessionTranscriptionProps): React.JSX.Element {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
-  const { agentStatus, isRunning, transcript, response, wsError, history, startPipeline } =
-    useAgent()
-  const lastHistoryCountRef = useRef(0)
+  const {
+    agentStatus,
+    isRunning,
+    pipelineStage,
+    pipelineState,
+    transcript,
+    response,
+    wsError,
+    currentSessionId,
+    startPipeline
+  } = useAgent()
+  const hasInvalidatedForCurrentRunRef = useRef(false)
   const [docsModalOpen, setDocsModalOpen] = useState(false)
   const deleteSessionMutation = useDeleteConversationSessionMutation()
   const uploadMutation = useUploadDocumentsMutation()
@@ -49,16 +59,39 @@ export function SessionTranscription({
 
   const micState: MicState =
     agentStatus === 'listening' ? 'listening' : agentStatus === 'thinking' ? 'thinking' : 'idle'
+  const isTranscribing = isRunning && pipelineStage === 'transcribing'
 
   useEffect(() => {
-    if (history.length <= lastHistoryCountRef.current) {
+    if (isRunning) {
+      hasInvalidatedForCurrentRunRef.current = false
       return
     }
 
-    lastHistoryCountRef.current = history.length
-    void queryClient.invalidateQueries({ queryKey: conversationsKeys.detail(conversationId) })
+    if (hasInvalidatedForCurrentRunRef.current) {
+      return
+    }
+
+    const isPipelineFinished =
+      pipelineState === 'completed' && (pipelineStage === 'speaking' || pipelineStage === 'responding')
+
+    if (!isPipelineFinished) {
+      return
+    }
+
+    hasInvalidatedForCurrentRunRef.current = true
+    const targetConversationId = currentSessionId ?? conversationId
+
+    void queryClient.invalidateQueries({ queryKey: conversationsKeys.detail(targetConversationId) })
     void queryClient.invalidateQueries({ queryKey: conversationsKeys.lists() })
-  }, [conversationId, history.length, queryClient])
+    void queryClient.invalidateQueries({ queryKey: conversationsKeys.list(50) })
+  }, [
+    conversationId,
+    currentSessionId,
+    isRunning,
+    pipelineStage,
+    pipelineState,
+    queryClient
+  ])
 
   const handleDeleteSession = async (): Promise<void> => {
     const accepted = window.confirm('Delete this session and all attached messages/documents?')
@@ -128,6 +161,12 @@ export function SessionTranscription({
           onUpload={handleUpload}
           isUploading={uploadMutation.isPending}
         />
+      ) : null}
+
+      {isTranscribing ? (
+        <div className="corg-transcription-waveform">
+          <Waveform />
+        </div>
       ) : null}
 
       {transcript ? <p className="corg-state-label">{transcript}</p> : null}
