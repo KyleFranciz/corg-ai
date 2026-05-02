@@ -13,7 +13,9 @@ from rag.retrieval import RetrievedChunk, build_context_block, retrieve_relevant
 from services.offline_guard import require_local_service_url
 
 DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11434"
-DEFAULT_AGENT_MODEL = "qwen3.5:9b"
+DEFAULT_AGENT_MODEL = (
+    "qwen3.5:4b"  # can also use qwen3.5:9b instead but 4b is takes less time to load
+)
 DEFAULT_TEMPERATURE = 0.2
 DEFAULT_HISTORY_LIMIT = 12
 
@@ -85,6 +87,7 @@ def get_chat_model() -> ChatOllama:
         "model": model_name,
         "base_url": ollama_host,
         "temperature": temperature,
+        "keep_alive": -1,
     }
     if max_tokens is not None:
         model_kwargs["num_predict"] = max_tokens
@@ -238,10 +241,12 @@ def stream_agent_response_chunks(
     history_messages: Sequence[AgentHistoryMessage] | None = None,
     retrieved_chunks: Sequence[RetrievedChunk] | None = None,
 ) -> Iterator[str]:
-    messages, clean_user_text, ollama_host, model_name, message_history = _build_agent_messages(
-        user_text,
-        history_messages,
-        retrieved_chunks,
+    messages, clean_user_text, ollama_host, model_name, message_history = (
+        _build_agent_messages(
+            user_text,
+            history_messages,
+            retrieved_chunks,
+        )
     )
 
     logger.info(
@@ -256,7 +261,9 @@ def stream_agent_response_chunks(
     llm = get_chat_model()
     try:
         for chunk in llm.stream(messages):
-            chunk_text = _normalize_stream_chunk_content(getattr(chunk, "content", chunk))
+            chunk_text = _normalize_stream_chunk_content(
+                getattr(chunk, "content", chunk)
+            )
             if chunk_text:
                 yield chunk_text
     except Exception as exc:
@@ -277,10 +284,12 @@ def generate_agent_response(
     retrieved_chunks: Sequence[RetrievedChunk] | None = None,
 ) -> str:
     started_at = time.perf_counter()
-    messages, clean_user_text, ollama_host, model_name, message_history = _build_agent_messages(
-        user_text,
-        history_messages,
-        retrieved_chunks,
+    messages, clean_user_text, ollama_host, model_name, message_history = (
+        _build_agent_messages(
+            user_text,
+            history_messages,
+            retrieved_chunks,
+        )
     )
 
     logger.info(
