@@ -9,7 +9,11 @@ import {
   conversationsKeys,
   useDeleteConversationSessionMutation
 } from '@renderer/queries/conversationsQueries'
-import { useSessionDocumentsQuery } from '@renderer/queries/documentsQueries'
+import {
+  documentsKeys,
+  useSessionDocumentsQuery,
+  useUploadDocumentsMutation
+} from '@renderer/queries/documentsQueries'
 import type { ConversationSession } from '@renderer/schemas/conversation'
 import { toast } from 'sonner'
 
@@ -29,8 +33,19 @@ export function SessionTranscription({
   const lastHistoryCountRef = useRef(0)
   const [docsModalOpen, setDocsModalOpen] = useState(false)
   const deleteSessionMutation = useDeleteConversationSessionMutation()
+  const uploadMutation = useUploadDocumentsMutation()
   const { data: docsData } = useSessionDocumentsQuery(conversationId)
   const documents = docsData?.documents ?? []
+
+  const handleUpload = async (files: File[]): Promise<void> => {
+    try {
+      await uploadMutation.mutateAsync({ sessionId: conversationId, files })
+      await queryClient.invalidateQueries({ queryKey: documentsKeys.session(conversationId) })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Upload failed'
+      toast.error(message)
+    }
+  }
 
   const micState: MicState =
     agentStatus === 'listening' ? 'listening' : agentStatus === 'thinking' ? 'thinking' : 'idle'
@@ -107,7 +122,12 @@ export function SessionTranscription({
       <DocumentsButton count={documents.length} onClick={() => setDocsModalOpen(true)} />
 
       {docsModalOpen ? (
-        <DocumentModal documents={documents} onClose={() => setDocsModalOpen(false)} />
+        <DocumentModal
+          documents={documents}
+          onClose={() => setDocsModalOpen(false)}
+          onUpload={handleUpload}
+          isUploading={uploadMutation.isPending}
+        />
       ) : null}
 
       {transcript ? <p className="corg-state-label">{transcript}</p> : null}
