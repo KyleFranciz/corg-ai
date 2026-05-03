@@ -71,10 +71,12 @@ export function SessionTranscription({
       return
     }
 
-    const isPipelineFinished =
-      pipelineState === 'completed' && (pipelineStage === 'speaking' || pipelineStage === 'responding')
+    const isCompletedStage =
+      pipelineStage === 'responding' || pipelineStage === 'speaking' || pipelineStage === 'completed'
+    const isPipelineFinished = pipelineState === 'completed' && isCompletedStage
+    const hasCompletedResponse = response !== null
 
-    if (!isPipelineFinished) {
+    if (!isPipelineFinished && !hasCompletedResponse) {
       return
     }
 
@@ -90,6 +92,7 @@ export function SessionTranscription({
     isRunning,
     pipelineStage,
     pipelineState,
+    response,
     queryClient
   ])
 
