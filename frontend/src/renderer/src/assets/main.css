@@ -231,6 +231,111 @@
   margin-top: 8px;
 }
 
+/* ---- Intro chatbox with inline mic (design variant 01b) ---- */
+
+.corg-intro-chatbox {
+  display: flex;
+  align-items: center;
+  width: min(520px, 100%);
+  height: 64px;
+  border: 1px dashed var(--corg-ink);
+  border-radius: 7px;
+  background: var(--corg-paper);
+  transition: border-color var(--corg-dur-fast) var(--corg-ease);
+  overflow: hidden;
+  gap: 0;
+}
+
+.corg-intro-chatbox:focus-within {
+  border-style: solid;
+}
+
+.corg-intro-chatbox__input {
+  flex: 1;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0 0 0 22px;
+  font-family: var(--corg-serif);
+  font-style: italic;
+  font-size: 22px;
+  letter-spacing: -0.02em;
+  color: var(--corg-ink);
+  outline: none;
+  min-width: 0;
+}
+
+.corg-intro-chatbox__input::placeholder {
+  color: var(--corg-ink-mute);
+}
+
+.corg-intro-chatbox__input:disabled {
+  cursor: default;
+}
+
+.corg-intro-chatbox__actions {
+  display: flex;
+  align-items: center;
+  padding-right: 8px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.corg-intro-chatbox__send {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--corg-ink-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    color var(--corg-dur-fast) var(--corg-ease),
+    background var(--corg-dur-fast) var(--corg-ease);
+}
+
+.corg-intro-chatbox__send:hover {
+  color: var(--corg-ink);
+  background: var(--corg-paper-2);
+  border-radius: 5px;
+}
+
+.corg-intro-chatbox__mic {
+  width: 48px;
+  height: 48px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--corg-ink);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  transition:
+    background var(--corg-dur-fast) var(--corg-ease),
+    border-radius var(--corg-dur) var(--corg-ease),
+    width var(--corg-dur) var(--corg-ease);
+}
+
+.corg-intro-chatbox__mic--listening {
+  border-radius: 24px;
+}
+
+.corg-intro-chatbox__mic--thinking {
+  border-radius: 24px;
+  width: 40px;
+}
+
+.corg-intro-chatbox__mic:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
 /* ---- Listening screen ---- */
 
 .corg-listening-content {
@@ -271,12 +376,19 @@
 .corg-thinking-text {
   font-family: var(--corg-serif);
   font-style: italic;
-  font-size: clamp(64px, 8.9vw, 128px);
   letter-spacing: -0.02em;
   line-height: 1;
   color: var(--corg-ink);
   display: inline-flex;
   align-items: baseline;
+}
+
+.corg-thinking-text--default {
+  font-size: clamp(64px, 8.9vw, 128px);
+}
+
+.corg-thinking-text--small {
+  font-size: clamp(20px, 2.2vw, 30px);
 }
 
 .corg-thinking-dots {
@@ -407,6 +519,20 @@
   left: 50%;
   bottom: 164px;
   transform: translateX(-50%);
+}
+
+.corg-response-thinking-inline {
+  margin-top: -6px;
+}
+
+.corg-thinking-animation-bubble {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: var(--corg-paper-2);
+  border: 1px solid var(--corg-ink-faint);
 }
 
 /* ---- Mic footer (for listening/thinking/response) ---- */

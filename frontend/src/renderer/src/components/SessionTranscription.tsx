@@ -8,14 +8,18 @@ import { DocumentModal } from '@renderer/components/DocumentModal'
 import { DocumentsButton } from '@renderer/components/DocumentsButton'
 import { useAgent } from '@renderer/hooks/useAgent'
 import { askFollowUpQuestionStream } from '@renderer/api/conversationsApi'
-import { conversationsKeys, useDeleteConversationSessionMutation } from '@renderer/queries/conversationsQueries'
+import {
+  conversationsKeys,
+  useDeleteConversationSessionMutation
+} from '@renderer/queries/conversationsQueries'
 import {
   documentsKeys,
   useSessionDocumentsQuery,
   useUploadDocumentsMutation
 } from '@renderer/queries/documentsQueries'
 import type { ConversationSession } from '@renderer/schemas/conversation'
-import ReactMarkdown from 'react-markdown'
+import { MessageBubble } from '@renderer/components/MessageBubble'
+import { ThinkingAnimationBubble } from '@renderer/components/ThinkingAnimationBubble'
 import { toast } from 'sonner'
 
 type SessionTranscriptionProps = {
@@ -28,6 +32,7 @@ export function SessionTranscription({
   conversation
 }: SessionTranscriptionProps): React.JSX.Element {
   const queryClient = useQueryClient()
+  const responseContentRef = useRef<HTMLDivElement | null>(null)
   const navigate = useNavigate()
   const {
     agentStatus,
@@ -41,6 +46,7 @@ export function SessionTranscription({
     startPipeline
   } = useAgent()
   const hasInvalidatedForCurrentRunRef = useRef(false)
+  const hasConsumedPendingQuestionRef = useRef(false)
   const [docsModalOpen, setDocsModalOpen] = useState(false)
   const deleteSessionMutation = useDeleteConversationSessionMutation()
   const [pendingTypedQuestion, setPendingTypedQuestion] = useState<string | null>(null)
@@ -72,7 +78,9 @@ export function SessionTranscription({
       pipelineStage === 'responding' ||
       pipelineStage === 'speaking')
   const isStreamingResponse =
-    isRunning && (pipelineStage === 'responding' || pipelineStage === 'speaking') && response !== null
+    isRunning &&
+    (pipelineStage === 'responding' || pipelineStage === 'speaking') &&
+    response !== null
 
   useEffect(() => {
     if (isRunning) {
@@ -85,7 +93,9 @@ export function SessionTranscription({
     }
 
     const isCompletedStage =
-      pipelineStage === 'responding' || pipelineStage === 'speaking' || pipelineStage === 'completed'
+      pipelineStage === 'responding' ||
+      pipelineStage === 'speaking' ||
+      pipelineStage === 'completed'
     const isPipelineFinished = pipelineState === 'completed' && isCompletedStage
     const hasCompletedResponse = response !== null
 
@@ -151,6 +161,22 @@ export function SessionTranscription({
   }
 
   useEffect(() => {
+    if (hasConsumedPendingQuestionRef.current) {
+      return
+    }
+
+    const storageKey = `corg:pending-question:${conversationId}`
+    const pendingQuestion = sessionStorage.getItem(storageKey)
+    if (!pendingQuestion) {
+      return
+    }
+
+    hasConsumedPendingQuestionRef.current = true
+    sessionStorage.removeItem(storageKey)
+    void handleSubmitText(pendingQuestion)
+  }, [conversationId])
+
+  useEffect(() => {
     if (!pendingTypedQuestion && !pendingTypedResponse) {
       return
     }
@@ -158,16 +184,19 @@ export function SessionTranscription({
     const hasMatchedQuestion =
       pendingTypedQuestion !== null &&
       conversation.messages.some(
-        (message) => message.role === 'user' && message.content.trim() === pendingTypedQuestion.trim()
+        (message) =>
+          message.role === 'user' && message.content.trim() === pendingTypedQuestion.trim()
       )
 
     const hasMatchedResponse =
       pendingTypedResponse !== null &&
       conversation.messages.some(
-        (message) => message.role === 'agent' && message.content.trim() === pendingTypedResponse.trim()
+        (message) =>
+          message.role === 'agent' && message.content.trim() === pendingTypedResponse.trim()
       )
 
     if (hasMatchedQuestion) {
+      // WARNING: FIX THE ERROR, IT CAUSES CASCADING RENDERS
       setPendingTypedQuestion(null)
     }
 
@@ -176,43 +205,47 @@ export function SessionTranscription({
     }
   }, [conversation.messages, pendingTypedQuestion, pendingTypedResponse])
 
+  useEffect(() => {
+    const container = responseContentRef.current
+    if (!container) {
+      return
+    }
+
+    container.scrollTop = container.scrollHeight
+  }, [
+    conversation.messages,
+    pendingTypedQuestion,
+    pendingTypedResponse,
+    response,
+    isStreamingResponse
+  ])
+
   return (
     <>
-      <div className="corg-response-content">
+      <div className="corg-response-content" ref={responseContentRef}>
         {conversation.messages.length === 0 ? (
           <p className="corg-state-label">No messages in this session yet.</p>
         ) : (
-          conversation.messages.map((message) =>
-            message.role === 'user' ? (
-              <div
-                key={message.id ?? `${message.role}-${message.created_at}`}
-                className="corg-user-transcript"
-              >
-                {message.content}
-              </div>
-            ) : (
-              <div
-                key={message.id ?? `${message.role}-${message.created_at}`}
-                className="corg-bubble"
-              >
-                <ReactMarkdown>{message.content}</ReactMarkdown>
-              </div>
-            )
-          )
+          conversation.messages.map((message) => (
+            <MessageBubble
+              key={message.id ?? `${message.role}-${message.created_at}`}
+              role={message.role}
+              content={message.content}
+            />
+          ))
         )}
 
-        {showPendingUserMessage ? <div className="corg-user-transcript">{transcript}</div> : null}
-        {pendingTypedQuestion ? <div className="corg-user-transcript">{pendingTypedQuestion}</div> : null}
-        {pendingTypedResponse !== null ? (
-          <div className="corg-bubble">
-            <ReactMarkdown>{pendingTypedResponse}</ReactMarkdown>
+        {showPendingUserMessage ? <MessageBubble role="user" content={transcript ?? ''} /> : null}
+        {pendingTypedQuestion ? <MessageBubble role="user" content={pendingTypedQuestion} /> : null}
+        {isSubmittingText && pendingTypedQuestion && !pendingTypedResponse ? (
+          <div className="corg-response-thinking-inline">
+            <ThinkingAnimationBubble />
           </div>
         ) : null}
-        {isStreamingResponse ? (
-          <div className="corg-bubble">
-            <ReactMarkdown>{response ?? ''}</ReactMarkdown>
-          </div>
+        {pendingTypedResponse !== null && pendingTypedResponse.length > 0 ? (
+          <MessageBubble role="agent" content={pendingTypedResponse} />
         ) : null}
+        {isStreamingResponse ? <MessageBubble role="agent" content={response ?? ''} /> : null}
       </div>
 
       <div className="corg-mic-footer">

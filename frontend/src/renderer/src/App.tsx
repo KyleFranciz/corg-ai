@@ -1,17 +1,12 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useAgent } from '@renderer/hooks/useAgent'
 import { ConversationHistorySidebar } from '@renderer/components/ConversationHistorySidebar'
 import { ThinkingText } from '@renderer/components/ThinkingText'
 import { IntroChatbox } from '@renderer/components/IntroChatbox'
 import { useUploadDocumentsMutation } from '@renderer/queries/documentsQueries'
-import {
-  conversationsKeys,
-  useCreateConversationSessionMutation
-} from '@renderer/queries/conversationsQueries'
-import { askFollowUpQuestionStream } from '@renderer/api/conversationsApi'
-import ReactMarkdown from 'react-markdown'
+import { useCreateConversationSessionMutation } from '@renderer/queries/conversationsQueries'
+import { MessageBubble } from '@renderer/components/MessageBubble'
 import { toast } from 'sonner'
 
 function PaperBg(): React.JSX.Element {
@@ -87,7 +82,6 @@ function App(): React.JSX.Element {
   const [typedQuestion, setTypedQuestion] = useState<string | null>(null)
   const [typedResponse, setTypedResponse] = useState<string | null>(null)
   const [isSubmittingText, setIsSubmittingText] = useState(false)
-  const queryClient = useQueryClient()
   const navigate = useNavigate()
   const sessionIdForActions = activeSessionId ?? currentSessionId
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -186,25 +180,9 @@ function App(): React.JSX.Element {
       params: { conversationId: String(sessionId) }
     })
 
-    try {
-      console.log('[App] asking follow-up question for session', sessionId)
-      setTypedResponse('')
-      const result = await askFollowUpQuestionStream(sessionId, question, {
-        onChunk: (chunk) => {
-          setTypedResponse((previous) => `${previous ?? ''}${chunk}`)
-        }
-      })
-      setTypedQuestion(result.question)
-      setTypedResponse(result.response)
-      await queryClient.invalidateQueries({ queryKey: conversationsKeys.detail(sessionId) })
-      await queryClient.invalidateQueries({ queryKey: conversationsKeys.lists() })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to send question'
-      toast.error(message)
-    } finally {
-      setPendingTextQuestion(null)
-      setIsSubmittingText(false)
-    }
+    sessionStorage.setItem(`corg:pending-question:${sessionId}`, question)
+    setPendingTextQuestion(null)
+    setIsSubmittingText(false)
   }
 
   useEffect(() => {
@@ -263,9 +241,11 @@ function App(): React.JSX.Element {
         {screen === 'listening' && (
           <>
             <div className="corg-listening-content">
-              <div className={transcript ? 'corg-user-transcript' : 'corg-user-transcript-placeholder'}>
-                {transcript ?? 'Your question will appear here once captured'}
-              </div>
+              <MessageBubble
+                role="user"
+                content={transcript ?? 'Your question will appear here once captured'}
+                placeholder={!transcript}
+              />
               <div className="corg-label">Listening</div>
             </div>
             <div className="corg-mic-footer">
@@ -284,7 +264,7 @@ function App(): React.JSX.Element {
           <>
             {transcript ? (
               <div className="corg-transcript-top">
-                <div className="corg-user-transcript">{transcript}</div>
+                <MessageBubble role="user" content={transcript} />
               </div>
             ) : null}
             <div className="corg-thinking-center">
@@ -306,14 +286,10 @@ function App(): React.JSX.Element {
           <>
             <div className="corg-response-content">
               {transcript || typedQuestion || pendingTextQuestion ? (
-                <div className="corg-user-transcript">
-                  {pendingTextQuestion ?? transcript ?? typedQuestion}
-                </div>
+                <MessageBubble role="user" content={pendingTextQuestion ?? transcript ?? typedQuestion ?? ''} />
               ) : null}
               {response || typedResponse ? (
-                <div className="corg-bubble">
-                  <ReactMarkdown>{response ?? typedResponse ?? ''}</ReactMarkdown>
-                </div>
+                <MessageBubble role="agent" content={response ?? typedResponse ?? ''} />
               ) : null}
             </div>
             <div className="corg-mic-footer">
