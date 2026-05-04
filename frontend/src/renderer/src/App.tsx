@@ -1,10 +1,17 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useAgent } from '@renderer/hooks/useAgent'
 import { ConversationHistorySidebar } from '@renderer/components/ConversationHistorySidebar'
-import { MicCapsule, type MicState } from '@renderer/components/MicCapsule'
 import { ThinkingText } from '@renderer/components/ThinkingText'
+import { IntroChatbox } from '@renderer/components/IntroChatbox'
 import { useUploadDocumentsMutation } from '@renderer/queries/documentsQueries'
-import { useCreateConversationSessionMutation } from '@renderer/queries/conversationsQueries'
+import {
+  conversationsKeys,
+  useCreateConversationSessionMutation
+} from '@renderer/queries/conversationsQueries'
+import { askFollowUpQuestionStream } from '@renderer/api/conversationsApi'
+import ReactMarkdown from 'react-markdown'
 import { toast } from 'sonner'
 
 function PaperBg(): React.JSX.Element {
@@ -68,7 +75,6 @@ function App(): React.JSX.Element {
   const {
     agentStatus,
     connectionState,
-    isRunning,
     transcript,
     response,
     wsError,
@@ -77,16 +83,23 @@ function App(): React.JSX.Element {
   } = useAgent()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null)
+  const [pendingTextQuestion, setPendingTextQuestion] = useState<string | null>(null)
+  const [typedQuestion, setTypedQuestion] = useState<string | null>(null)
+  const [typedResponse, setTypedResponse] = useState<string | null>(null)
+  const [isSubmittingText, setIsSubmittingText] = useState(false)
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const sessionIdForActions = activeSessionId ?? currentSessionId
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const uploadMutation = useUploadDocumentsMutation()
   const createSessionMutation = useCreateConversationSessionMutation()
   const hasSeenConnectionRef = useRef(false)
 
-  const micState: MicState =
+  const micState: 'idle' | 'listening' | 'thinking' =
     agentStatus === 'listening' ? 'listening' : agentStatus === 'thinking' ? 'thinking' : 'idle'
 
   const screen =
-    response !== null
+    response !== null || typedResponse !== null
       ? 'response'
       : agentStatus === 'thinking'
         ? 'thinking'
@@ -104,7 +117,7 @@ function App(): React.JSX.Element {
       return
     }
 
-    let sessionId = activeSessionId
+    let sessionId = sessionIdForActions
     if (!sessionId) {
       try {
         const created = await createSessionMutation.mutateAsync()
@@ -138,15 +151,60 @@ function App(): React.JSX.Element {
     event.target.value = ''
   }
 
-  useEffect(() => {
-    if (currentSessionId && activeSessionId !== currentSessionId) {
-      setActiveSessionId(currentSessionId)
-    }
-  }, [activeSessionId, currentSessionId])
-
   const handleStartPipeline = async (): Promise<void> => {
-    const options = activeSessionId ? { conversationId: activeSessionId } : undefined
+    setPendingTextQuestion(null)
+    setTypedQuestion(null)
+    setTypedResponse(null)
+    const options = sessionIdForActions ? { conversationId: sessionIdForActions } : undefined
     await startPipeline(options)
+  }
+
+  const handleSubmitText = async (question: string): Promise<void> => {
+    setPendingTextQuestion(question)
+    setTypedQuestion(question)
+    setTypedResponse(null)
+    setIsSubmittingText(true)
+
+    let sessionId = sessionIdForActions
+    if (!sessionId) {
+      try {
+        const created = await createSessionMutation.mutateAsync()
+        sessionId = created.session_id
+        setActiveSessionId(sessionId)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unable to create session'
+        toast.error(message)
+        setPendingTextQuestion(null)
+        setIsSubmittingText(false)
+        return
+      }
+    }
+
+    console.log('[App] navigating to session', sessionId)
+    await navigate({
+      to: '/conversation/$conversationId',
+      params: { conversationId: String(sessionId) }
+    })
+
+    try {
+      console.log('[App] asking follow-up question for session', sessionId)
+      setTypedResponse('')
+      const result = await askFollowUpQuestionStream(sessionId, question, {
+        onChunk: (chunk) => {
+          setTypedResponse((previous) => `${previous ?? ''}${chunk}`)
+        }
+      })
+      setTypedQuestion(result.question)
+      setTypedResponse(result.response)
+      await queryClient.invalidateQueries({ queryKey: conversationsKeys.detail(sessionId) })
+      await queryClient.invalidateQueries({ queryKey: conversationsKeys.lists() })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to send question'
+      toast.error(message)
+    } finally {
+      setPendingTextQuestion(null)
+      setIsSubmittingText(false)
+    }
   }
 
   useEffect(() => {
@@ -175,10 +233,12 @@ function App(): React.JSX.Element {
         {screen === 'intro' && (
           <div className="corg-intro">
             <div className="corg-wordmark">Corg</div>
-            <MicCapsule
-              state={micState}
-              onClick={() => void handleStartPipeline()}
-              disabled={isRunning}
+            <IntroChatbox
+              micState={micState}
+              onMicClick={() => void handleStartPipeline()}
+              onSubmitText={(text) => void handleSubmitText(text)}
+              disabled={createSessionMutation.isPending || isSubmittingText}
+              disableInputWhileMicActive={false}
             />
             <input
               ref={fileInputRef}
@@ -209,7 +269,13 @@ function App(): React.JSX.Element {
               <div className="corg-label">Listening</div>
             </div>
             <div className="corg-mic-footer">
-              <MicCapsule state="listening" />
+              <IntroChatbox
+                micState="listening"
+                onMicClick={() => void handleStartPipeline()}
+                onSubmitText={(text) => void handleSubmitText(text)}
+                disabled={createSessionMutation.isPending || isSubmittingText}
+                disableInputWhileMicActive={false}
+              />
             </div>
           </>
         )}
@@ -225,7 +291,13 @@ function App(): React.JSX.Element {
               <ThinkingText />
             </div>
             <div className="corg-mic-footer">
-              <MicCapsule state="thinking" />
+              <IntroChatbox
+                micState="thinking"
+                onMicClick={() => void handleStartPipeline()}
+                onSubmitText={(text) => void handleSubmitText(text)}
+                disabled={createSessionMutation.isPending || isSubmittingText}
+                disableInputWhileMicActive={false}
+              />
             </div>
           </>
         )}
@@ -233,14 +305,24 @@ function App(): React.JSX.Element {
         {screen === 'response' && (
           <>
             <div className="corg-response-content">
-              {transcript ? <div className="corg-user-transcript">{transcript}</div> : null}
-              {response ? <div className="corg-bubble">{response}</div> : null}
+              {transcript || typedQuestion || pendingTextQuestion ? (
+                <div className="corg-user-transcript">
+                  {pendingTextQuestion ?? transcript ?? typedQuestion}
+                </div>
+              ) : null}
+              {response || typedResponse ? (
+                <div className="corg-bubble">
+                  <ReactMarkdown>{response ?? typedResponse ?? ''}</ReactMarkdown>
+                </div>
+              ) : null}
             </div>
             <div className="corg-mic-footer">
-              <MicCapsule
-                state="idle"
-                onClick={() => void handleStartPipeline()}
-                disabled={isRunning}
+              <IntroChatbox
+                micState={micState}
+                onMicClick={() => void handleStartPipeline()}
+                onSubmitText={(text) => void handleSubmitText(text)}
+                disabled={createSessionMutation.isPending || isSubmittingText}
+                disableInputWhileMicActive={false}
               />
             </div>
           </>

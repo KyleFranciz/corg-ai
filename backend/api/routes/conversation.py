@@ -1,9 +1,11 @@
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlmodel import func, select
 from sqlmodel import Session as DbSession
@@ -11,7 +13,7 @@ from sqlmodel import Session as DbSession
 from database.chroma_client import get_chunks_collection
 from database.database_engine import DATA_DIR, engine
 from database.models import Chunks, Documents, MessageRole, Messages, Session
-from services.agent import generate_agent_response, retrieve_context
+from services.agent import retrieve_context, stream_agent_response_chunks
 
 router = APIRouter(tags=["conversation"])
 
@@ -255,10 +257,9 @@ def get_conversation(conversation_id: int) -> dict[str, Any]:
 def ask_follow_up_question(
     conversation_id: int,
     payload: FollowUpQuestionRequest,
-) -> FollowUpQuestionResponse:
+) -> StreamingResponse:
 
-    # format the question
-    clean_question = payload.question.strip()
+    clean_question = " ".join(payload.question.split()).strip()
     if not clean_question:
         raise HTTPException(status_code=400, detail="Question cannot be empty")
 
@@ -267,37 +268,86 @@ def ask_follow_up_question(
         if session_row is None:
             raise HTTPException(status_code=404, detail="Conversation not found")
 
-        existing_messages = _fetch_session_messages(db, conversation_id)
-        history = _to_agent_history(existing_messages)
-        retrieved_chunks = retrieve_context(clean_question)
-        response_text = generate_agent_response(
-            clean_question, history, retrieved_chunks
-        )
+    def _sse_event(event: str, data: dict[str, Any]) -> str:
+        return f"event: {event}\ndata: {json.dumps(data)}\n\n"
 
-        # format the different role messages
-        user_message = Messages(
-            session_id=conversation_id,
-            role=MessageRole.user,
-            content=clean_question,
-            audio_path=None,
-        )
-        agent_message = Messages(
-            session_id=conversation_id,
-            role=MessageRole.agent,
-            content=response_text,
-            audio_path=None,
-        )
+    def event_stream():
+        with DbSession(engine) as db:
+            try:
+                existing_messages = _fetch_session_messages(db, conversation_id)
+                history = _to_agent_history(existing_messages)
+                retrieved_chunks = retrieve_context(
+                    clean_question,
+                    session_id=conversation_id,
+                )
 
-        db.add(user_message)
-        db.add(agent_message)
-        db.commit()
+                yield _sse_event(
+                    "start",
+                    {
+                        "session_id": conversation_id,
+                        "question": clean_question,
+                        "retrieved_context_count": len(retrieved_chunks),
+                    },
+                )
 
-        return FollowUpQuestionResponse(
-            session_id=conversation_id,
-            question=clean_question,
-            response=response_text,
-            retrieved_context_count=len(retrieved_chunks),
-        )
+                response_parts: list[str] = []
+                for chunk_text in stream_agent_response_chunks(
+                    clean_question,
+                    history,
+                    retrieved_chunks,
+                ):
+                    response_parts.append(chunk_text)
+                    yield _sse_event("chunk", {"text": chunk_text})
+
+                response_text = "".join(response_parts).strip()
+                if not response_text:
+                    raise RuntimeError("Agent returned an empty response")
+
+                user_message = Messages(
+                    session_id=conversation_id,
+                    role=MessageRole.user,
+                    content=clean_question,
+                    audio_path=None,
+                )
+                agent_message = Messages(
+                    session_id=conversation_id,
+                    role=MessageRole.agent,
+                    content=response_text,
+                    audio_path=None,
+                )
+
+                db.add(user_message)
+                db.add(agent_message)
+                db.commit()
+
+                yield _sse_event(
+                    "done",
+                    {
+                        "session_id": conversation_id,
+                        "question": clean_question,
+                        "response": response_text,
+                        "retrieved_context_count": len(retrieved_chunks),
+                    },
+                )
+            except RuntimeError as exc:
+                logger.exception(
+                    "Ask stream generation failed conversation_id=%s question_chars=%s",
+                    conversation_id,
+                    len(clean_question),
+                )
+                yield _sse_event("error", {"message": str(exc)})
+            except Exception:
+                logger.exception(
+                    "Ask stream unexpected failure conversation_id=%s question_chars=%s",
+                    conversation_id,
+                    len(clean_question),
+                )
+                yield _sse_event(
+                    "error",
+                    {"message": "Failed to generate response for this question"},
+                )
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.delete('/conversation/{conversation_id}')
