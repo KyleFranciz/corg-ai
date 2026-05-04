@@ -60,6 +60,16 @@ export function SessionTranscription({
   const micState: MicState =
     agentStatus === 'listening' ? 'listening' : agentStatus === 'thinking' ? 'thinking' : 'idle'
   const isTranscribing = isRunning && pipelineStage === 'transcribing'
+  const hasPendingTranscript = transcript !== null && transcript.trim().length > 0
+  const showPendingUserMessage =
+    isRunning &&
+    hasPendingTranscript &&
+    (pipelineStage === 'transcribing' ||
+      pipelineStage === 'retrieving' ||
+      pipelineStage === 'responding' ||
+      pipelineStage === 'speaking')
+  const isStreamingResponse =
+    isRunning && (pipelineStage === 'responding' || pipelineStage === 'speaking') && response !== null
 
   useEffect(() => {
     if (isRunning) {
@@ -136,6 +146,9 @@ export function SessionTranscription({
             )
           )
         )}
+
+        {showPendingUserMessage ? <div className="corg-user-transcript">{transcript}</div> : null}
+        {isStreamingResponse ? <div className="corg-bubble">{response}</div> : null}
       </div>
 
       <div className="corg-mic-footer">
@@ -172,8 +185,9 @@ export function SessionTranscription({
         </div>
       ) : null}
 
-      {transcript ? <p className="corg-state-label">{transcript}</p> : null}
-      {response ? <div className="corg-bubble">{response}</div> : null}
+      {isTranscribing && !showPendingUserMessage && transcript ? (
+        <p className="corg-state-label">{transcript}</p>
+      ) : null}
       {wsError ? <p className="corg-followup-error">{wsError}</p> : null}
     </>
   )
